@@ -69,20 +69,19 @@
         };
 
         async function uploadImage(file) {
-            // Нормализуем имя файла: убираем кириллицу и спецсимволы
-            const originalName = file.name;
-            const ext = originalName.split('.').pop();
-            const safeName = originalName
-                .replace(/[^a-zA-Z0-9.]/g, '_')
-                .replace(/_{2,}/g, '_')
-                .replace(/^_|_$/g, '');
-            const fileName = `${Date.now()}_${safeName}`;
-            
+            const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
             console.log('Загружаем файл:', fileName);
+            
             const { data, error } = await supabaseClient.storage
                 .from('achievements')
-                .upload(fileName, file);
-            if (error) throw error;
+                .upload(fileName, file, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+            if (error) {
+                console.error('Ошибка загрузки файла:', error);
+                throw error;
+            }
             const { data: urlData } = supabaseClient.storage
                 .from('achievements')
                 .getPublicUrl(fileName);
@@ -102,6 +101,8 @@
 
             try {
                 const imageUrl = await uploadImage(file);
+                console.log('Картинка загружена, URL:', imageUrl);
+                
                 const { error } = await supabaseClient
                     .from('achievements')
                     .insert([{
@@ -110,13 +111,16 @@
                         player_vk_id: parseInt(playerId),
                         image_url: imageUrl
                     }]);
-                if (error) throw error;
+                if (error) {
+                    console.error('Ошибка вставки:', error);
+                    throw error;
+                }
                 document.getElementById('message').innerText = '✅ Достижение опубликовано!';
                 document.getElementById('title').value = '';
                 document.getElementById('imageFile').value = '';
             } catch (err) {
-                console.error(err);
-                alert('Ошибка: ' + err.message);
+                console.error('Общая ошибка:', err);
+                alert('Ошибка: ' + (err.message || err));
             }
         };
     </script>
