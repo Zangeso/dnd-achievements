@@ -10,7 +10,7 @@
 <body>
     <div id="admin-panel">
         <h2>Добавить достижение</h2>
-        <div id="loading">Загрузка...</div>
+        <div id="loading">Проверка прав доступа...</div>
         <div id="adminContent" style="display:none;">
             <label>Выберите игрока:</label>
             <select id="playerSelect"></select>
@@ -19,89 +19,89 @@
             <button id="submitBtn">Опубликовать</button>
             <div id="message"></div>
         </div>
+        <div id="errorMsg" style="display:none; color:red;">Доступ только для администраторов группы.</div>
     </div>
     <script>
         // ---------- НАСТРОЙКИ (ЗАМЕНИТЕ НА СВОИ) ----------
-        const GROUP_ID = 236712001;        // положительный ID группы
-        const ALBUM_ID = 310403391;        // ID альбома
+        const APP_ID = 54508090;
+const GROUP_ID = 236712001;
+const ALBUM_ID = 310403391;        // ID альбома
         const STORAGE_KEY = 'dnd_achievements';
-        const APP_ID = ВАШ_ID_ПРИЛОЖЕНИЯ;   // ID вашего Mini App (число)
         // -------------------------------------------------
 
         vkBridge.send('VKWebAppInit');
 
-        let accessToken = null;
-
         // Запрашиваем токен с нужными правами
-        async function getToken() {
+        vkBridge.send('VKWebAppGetAuthToken', {
+            app_id: APP_ID,
+            scope: 'photos,storage,groups'
+        }).then(async () => {
+            // Проверяем, является ли пользователь администратором группы
+            const isAdmin = await checkIfAdmin();
+            if (isAdmin) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('adminContent').style.display = 'block';
+                loadGroupMembers();  // загружаем список участников
+            } else {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('errorMsg').style.display = 'block';
+            }
+        }).catch(err => {
+            console.error('Ошибка получения токена', err);
+            document.getElementById('loading').innerText = 'Не удалось получить разрешения. Возможно, вы отклонили запрос. Перезагрузите страницу.';
+        });
+
+        // Проверка: является ли текущий пользователь администратором группы
+        async function checkIfAdmin() {
             try {
-                const result = await vkBridge.send('VKWebAppGetAuthToken', {
-                    app_id: APP_ID,
-                    scope: 'photos,storage,groups'
+                // Получаем информацию о текущем пользователе
+                const user = await vkBridge.send('VKWebAppGetUserInfo');
+                // Вызываем groups.isMember с extended=1
+                const response = await vkBridge.send('VKWebAppCallAPIMethod', {
+                    method: 'groups.isMember',
+                    params: {
+                        group_id: GROUP_ID,
+                        user_id: user.id,
+                        extended: 1
+                    }
                 });
-                accessToken = result.access_token;
-                return accessToken;
+                // response.response — объект с полями member, can_invite, etc.
+                // Нам нужно, чтобы member было true и role была не 'member' (т.е. администратор, редактор и т.п.)
+                const data = response.response;
+                if (data.member && data.role && data.role !== 'member') {
+                    return true;
+                } else {
+                    return false;
+                }
             } catch (e) {
-                console.error('Ошибка получения токена:', e);
-                alert('Не удалось получить доступ. Пожалуйста, разрешите запрошенные права.');
-                throw e;
+                console.error('Ошибка проверки администратора', e);
+                return false;
             }
         }
 
-        // Универсальный вызов метода API с токеном
-        async function callApi(method, params = {}) {
-            if (!accessToken) await getToken();
-            params.access_token = accessToken;
-            params.v = '5.131';
-            const result = await vkBridge.send('VKWebAppCallAPIMethod', {
-                method: method,
-                params: params
-            });
-            return result.response;
-        }
-
-        // Загрузка списка участников группы
+        // Загрузка списка участников группы (для выбора игрока)
         async function loadGroupMembers() {
             try {
-                const members = await callApi('groups.getMembers', {
-                    group_id: GROUP_ID,
-                    fields: 'first_name,last_name',
-                    count: 200
+                const response = await vkBridge.send('VKWebAppCallAPIMethod', {
+                    method: 'groups.getMembers',
+                    params: {
+                        group_id: GROUP_ID,
+                        fields: 'first_name,last_name',
+                        count: 200
+                    }
                 });
-                return members.items.map(m => ({
-                    name: `${m.first_name} ${m.last_name}`,
-                    id: m.id
-                }));
-            } catch (e) {
-                console.error('Ошибка загрузки участников:', e);
-                alert('Не удалось загрузить список игроков. Убедитесь, что вы разрешили доступ.');
-                return [];
-            }
-        }
-
-        // Заполнить выпадающий список
-        async function initAdmin() {
-            document.getElementById('loading').innerText = 'Запрашиваем доступ...';
-            try {
-                await getToken();
-                document.getElementById('loading').innerText = 'Загружаем список игроков...';
-                const members = await loadGroupMembers();
-                if (members.length === 0) {
-                    document.getElementById('loading').innerText = 'Список игроков пуст или недоступен.';
-                    return;
-                }
+                const members = response.response.items;
                 const select = document.getElementById('playerSelect');
                 select.innerHTML = '';
                 members.forEach(m => {
                     const option = document.createElement('option');
                     option.value = m.id;
-                    option.textContent = m.name;
+                    option.textContent = `${m.first_name} ${m.last_name}`;
                     select.appendChild(option);
                 });
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('adminContent').style.display = 'block';
-            } catch (err) {
-                document.getElementById('loading').innerText = 'Ошибка: ' + err.message;
+            } catch (e) {
+                console.error('Ошибка загрузки участников', e);
+                alert('Не удалось загрузить список игроков. Убедитесь, что приложение имеет доступ к группе.');
             }
         }
 
@@ -118,41 +118,42 @@
             }
 
             try {
-                // 1. Получаем сервер для загрузки фото
-                const uploadData = await callApi('photos.getUploadServer', {
-                    group_id: GROUP_ID,
-                    album_id: ALBUM_ID
+                // 1. Загружаем фото в альбом группы
+                const uploadServerRes = await vkBridge.send('VKWebAppCallAPIMethod', {
+                    method: 'photos.getUploadServer',
+                    params: { group_id: GROUP_ID, album_id: ALBUM_ID }
                 });
-                const uploadUrl = uploadData.upload_url;
+                const uploadUrl = uploadServerRes.response.upload_url;
 
-                // 2. Загружаем файл
                 const formData = new FormData();
                 formData.append('file', file);
                 const uploadResponse = await fetch(uploadUrl, {
                     method: 'POST',
                     body: formData
                 });
-                const uploadResult = await uploadResponse.json();
+                const uploadData = await uploadResponse.json();
 
-                // 3. Сохраняем фото в альбоме
-                const saveResult = await callApi('photos.save', {
-                    group_id: GROUP_ID,
-                    album_id: ALBUM_ID,
-                    server: uploadResult.server,
-                    photos_list: uploadResult.photos_list,
-                    hash: uploadResult.hash
+                const saveRes = await vkBridge.send('VKWebAppCallAPIMethod', {
+                    method: 'photos.save',
+                    params: {
+                        group_id: GROUP_ID,
+                        album_id: ALBUM_ID,
+                        server: uploadData.server,
+                        photos_list: uploadData.photos_list,
+                        hash: uploadData.hash
+                    }
                 });
-                const photo = saveResult[0];
+                const photo = saveRes.response[0];
                 const photoUrl = photo.sizes[photo.sizes.length-1].url;
 
-                // 4. Получаем текущие достижения из Storage
+                // 2. Получаем текущие достижения из Storage
                 const storageRes = await vkBridge.send('VKWebAppStorageGet', { keys: [STORAGE_KEY] });
                 let achievements = [];
                 if (storageRes.keys[0] && storageRes.keys[0].value) {
                     achievements = JSON.parse(storageRes.keys[0].value);
                 }
 
-                // 5. Добавляем новое
+                // 3. Добавляем новое
                 achievements.push({
                     title: title,
                     playerName: playerName,
@@ -161,7 +162,7 @@
                     timestamp: Date.now()
                 });
 
-                // 6. Сохраняем обратно в Storage
+                // 4. Сохраняем обратно
                 await vkBridge.send('VKWebAppStorageSet', {
                     key: STORAGE_KEY,
                     value: JSON.stringify(achievements)
@@ -175,9 +176,6 @@
                 alert('Ошибка: ' + (err.message || err));
             }
         };
-
-        // Запускаем
-        initAdmin();
     </script>
 </body>
 </html>
