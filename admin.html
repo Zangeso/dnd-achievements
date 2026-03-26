@@ -23,12 +23,11 @@
         <div id="errorMsg" style="display:none; color:#ff8888;"></div>
     </div>
     <script>
-        // Данные Supabase
         const SUPABASE_URL = 'https://jrwgibmbjaoogsdnukzi.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_UjoyHMlGvIvQMxKTENAUMQ_OE3GtvON';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        const GROUP_ID = 236712001;          // ID вашей группы (положительный)
-        const APP_ID = 54508090;             // ID вашего VK приложения
+        const GROUP_ID = 236712001;
+        const APP_ID = 54508090;
 
         let communityToken = null;
         let currentUserId = null;
