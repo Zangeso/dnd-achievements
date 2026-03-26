@@ -19,44 +19,53 @@
             <button id="submitBtn">Опубликовать</button>
             <div id="message"></div>
         </div>
-        <div id="errorMsg" style="display:none; color:red;">Доступ только для администраторов группы.</div>
+        <div id="errorMsg" style="display:none; color:red; margin-top:10px;"></div>
+        <div id="manualPlayers" style="display:none; margin-top:10px;">
+            <label>Ручной ввод игроков (если список не загрузился):</label>
+            <textarea id="manualList" rows="3" placeholder='[{"name":"Алексей","id":123456789},{"name":"Мария","id":987654321}]'></textarea>
+            <button id="useManualBtn">Использовать этот список</button>
+        </div>
     </div>
     <script>
-        // ---------- НАСТРОЙКИ (ЗАМЕНИТЕ НА СВОИ) ----------
+        // ---------- НАСТРОЙКИ (УЖЕ ВАШИ) ----------
         const APP_ID = 54508090;
-const GROUP_ID = 236712001;
-const ALBUM_ID = 310403391;        // ID альбома
+        const GROUP_ID = 236712001;
+        const ALBUM_ID = 310403391;
         const STORAGE_KEY = 'dnd_achievements';
-        // -------------------------------------------------
+        // ------------------------------------------
 
         vkBridge.send('VKWebAppInit');
 
-        // Запрашиваем токен с нужными правами
+        // Запрашиваем токен с правами photos, storage, groups
         vkBridge.send('VKWebAppGetAuthToken', {
             app_id: APP_ID,
             scope: 'photos,storage,groups'
         }).then(async () => {
-            // Проверяем, является ли пользователь администратором группы
+            console.log('Токен получен');
+            // Проверяем, админ ли пользователь
             const isAdmin = await checkIfAdmin();
             if (isAdmin) {
+                console.log('Пользователь администратор');
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('adminContent').style.display = 'block';
-                loadGroupMembers();  // загружаем список участников
+                // Пытаемся загрузить список участников
+                loadGroupMembers();
             } else {
+                console.log('Пользователь НЕ администратор');
                 document.getElementById('loading').style.display = 'none';
-                document.getElementById('errorMsg').style.display = 'block';
+                const errorDiv = document.getElementById('errorMsg');
+                errorDiv.innerText = 'Доступ только для администраторов группы.';
+                errorDiv.style.display = 'block';
             }
         }).catch(err => {
-            console.error('Ошибка получения токена', err);
-            document.getElementById('loading').innerText = 'Не удалось получить разрешения. Возможно, вы отклонили запрос. Перезагрузите страницу.';
+            console.error('Ошибка получения токена:', err);
+            document.getElementById('loading').innerText = 'Не удалось получить разрешения. Перезагрузите страницу и разрешите доступ.';
         });
 
-        // Проверка: является ли текущий пользователь администратором группы
         async function checkIfAdmin() {
             try {
-                // Получаем информацию о текущем пользователе
                 const user = await vkBridge.send('VKWebAppGetUserInfo');
-                // Вызываем groups.isMember с extended=1
+                console.log('Текущий пользователь:', user);
                 const response = await vkBridge.send('VKWebAppCallAPIMethod', {
                     method: 'groups.isMember',
                     params: {
@@ -65,23 +74,24 @@ const ALBUM_ID = 310403391;        // ID альбома
                         extended: 1
                     }
                 });
-                // response.response — объект с полями member, can_invite, etc.
-                // Нам нужно, чтобы member было true и role была не 'member' (т.е. администратор, редактор и т.п.)
+                console.log('Результат groups.isMember:', response);
                 const data = response.response;
+                // role может быть 'admin', 'editor', 'moderator', 'member' и т.д.
                 if (data.member && data.role && data.role !== 'member') {
                     return true;
                 } else {
+                    console.warn('Пользователь не администратор, role:', data.role);
                     return false;
                 }
             } catch (e) {
-                console.error('Ошибка проверки администратора', e);
+                console.error('Ошибка при проверке администратора:', e);
                 return false;
             }
         }
 
-        // Загрузка списка участников группы (для выбора игрока)
         async function loadGroupMembers() {
             try {
+                console.log('Загружаем участников группы...');
                 const response = await vkBridge.send('VKWebAppCallAPIMethod', {
                     method: 'groups.getMembers',
                     params: {
@@ -90,22 +100,64 @@ const ALBUM_ID = 310403391;        // ID альбома
                         count: 200
                     }
                 });
+                console.log('Участники загружены:', response);
                 const members = response.response.items;
-                const select = document.getElementById('playerSelect');
-                select.innerHTML = '';
-                members.forEach(m => {
-                    const option = document.createElement('option');
-                    option.value = m.id;
-                    option.textContent = `${m.first_name} ${m.last_name}`;
-                    select.appendChild(option);
-                });
+                if (members && members.length) {
+                    const select = document.getElementById('playerSelect');
+                    select.innerHTML = '';
+                    members.forEach(m => {
+                        const option = document.createElement('option');
+                        option.value = m.id;
+                        option.textContent = `${m.first_name} ${m.last_name}`;
+                        select.appendChild(option);
+                    });
+                    // Если всё ок, скрываем ручной ввод
+                    document.getElementById('manualPlayers').style.display = 'none';
+                } else {
+                    throw new Error('Список участников пуст');
+                }
             } catch (e) {
-                console.error('Ошибка загрузки участников', e);
-                alert('Не удалось загрузить список игроков. Убедитесь, что приложение имеет доступ к группе.');
+                console.error('Ошибка загрузки участников:', e);
+                // Показываем блок ручного ввода
+                document.getElementById('manualPlayers').style.display = 'block';
+                const errorDiv = document.getElementById('errorMsg');
+                errorDiv.innerText = 'Не удалось загрузить список участников. Вы можете ввести игроков вручную ниже.';
+                errorDiv.style.display = 'block';
+                // Предзаполняем примером
+                document.getElementById('manualList').value = JSON.stringify([
+                    { name: "Игрок 1", id: 123456789 },
+                    { name: "Игрок 2", id: 987654321 }
+                ], null, 2);
             }
         }
 
-        // Публикация достижения
+        // Обработка ручного списка
+        document.getElementById('useManualBtn').onclick = () => {
+            try {
+                const manualText = document.getElementById('manualList').value;
+                const players = JSON.parse(manualText);
+                if (!Array.isArray(players)) throw new Error('Не массив');
+                const select = document.getElementById('playerSelect');
+                select.innerHTML = '';
+                players.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = p.name;
+                    select.appendChild(option);
+                });
+                document.getElementById('manualPlayers').style.display = 'none';
+                document.getElementById('errorMsg').style.display = 'none';
+                // Если до этого не показывали adminContent, показываем
+                if (document.getElementById('adminContent').style.display === 'none') {
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('adminContent').style.display = 'block';
+                }
+            } catch (e) {
+                alert('Ошибка в формате JSON. Используйте формат: [{"name":"Имя","id":123}]');
+            }
+        };
+
+        // Публикация достижения (код остаётся без изменений)
         document.getElementById('submitBtn').onclick = async () => {
             const title = document.getElementById('title').value;
             const playerId = document.getElementById('playerSelect').value;
@@ -148,10 +200,7 @@ const ALBUM_ID = 310403391;        // ID альбома
 
                 // 2. Получаем текущие достижения из Storage
                 const storageRes = await vkBridge.send('VKWebAppStorageGet', { keys: [STORAGE_KEY] });
-                let achievements = [];
-                if (storageRes.keys[0] && storageRes.keys[0].value) {
-                    achievements = JSON.parse(storageRes.keys[0].value);
-                }
+                let achievements = storageRes.keys[0]?.value ? JSON.parse(storageRes.keys[0].value) : [];
 
                 // 3. Добавляем новое
                 achievements.push({
