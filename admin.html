@@ -1,47 +1,179 @@
-document.getElementById('submitBtn').onclick = async () => {
-    const title = document.getElementById('title').value;
-    const select = document.getElementById('playerSelect');
-    const playerId = select.value;
-    const playerName = select.options[select.selectedIndex].text;
-    const playerAvatar = select.options[select.selectedIndex].getAttribute('data-avatar') || '';
-    const file = document.getElementById('imageFile').files[0];
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>Админка D&D</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div id="admin-panel">
+        <h2>Добавить достижение</h2>
+        <div id="loading">Инициализация...</div>
+        <div id="adminContent" style="display:none;">
+            <label>Выберите игрока:</label>
+            <select id="playerSelect"></select>
+            <input type="text" id="title" placeholder="Название достижения" />
+            <input type="file" id="imageFile" accept="image/*" />
+            <button id="submitBtn">Опубликовать</button>
+            <div id="message"></div>
+        </div>
+        <div id="errorMsg" style="display:none; color:#ff8888;"></div>
+        <div id="manualPlayers" style="display:none; margin-top:10px;">
+            <label>Не удалось загрузить список участников. Введите игроков вручную (JSON):</label>
+            <textarea id="manualList" rows="4" placeholder='[{"name":"Имя","id":123456789,"avatar":""}]'></textarea>
+            <button id="useManualBtn">Применить список</button>
+        </div>
+    </div>
+    <script>
+        const SUPABASE_URL = 'https://jrwgibmbjaoogsdnukzi.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_UjoyHMlGvIvQMxKTENAUMQ_OE3GtvON';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const GROUP_ID = 236712001;
+        const APP_ID = 54509223;
+        const ADMIN_VK_ID = 162536789;
 
-    if (!title || !file) {
-        alert('Заполните название и выберите картинку');
-        return;
-    }
+        let userToken = null;
+        let currentUserId = null;
 
-    try {
-        console.log('Начинаем загрузку картинки...');
-        const imageUrl = await uploadImage(file);
-        console.log('Картинка загружена, URL:', imageUrl);
-        
-        const insertData = {
-            title,
-            player_name: playerName,
-            player_vk_id: parseInt(playerId),
-            player_avatar: playerAvatar,
-            image_url: imageUrl
-        };
-        console.log('Вставляем в таблицу:', insertData);
-        
-        const { data, error } = await supabaseClient
-            .from('achievements')
-            .insert([insertData])
-            .select();
-            
-        if (error) {
-            console.error('Ошибка вставки:', error);
-            alert('Ошибка базы данных: ' + error.message);
-            return;
+        vkBridge.send('VKWebAppInit').then(() => {
+            return vkBridge.send('VKWebAppGetUserInfo');
+        }).then(user => {
+            currentUserId = user.id;
+            if (currentUserId !== ADMIN_VK_ID) {
+                document.getElementById('loading').innerHTML = 'Доступ запрещён. Вы не администратор.';
+                return;
+            }
+            return supabaseClient.rpc('set_user_id', { user_id: currentUserId });
+        }).then(() => {
+            return vkBridge.send('VKWebAppGetAuthToken', {
+                app_id: APP_ID,
+                scope: 'groups'
+            });
+        }).then(data => {
+            userToken = data.access_token;
+            console.log('Токен получен');
+            return loadGroupMembers();
+        }).then(() => {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('adminContent').style.display = 'block';
+        }).catch(err => {
+            console.error('Ошибка:', err);
+            document.getElementById('loading').innerHTML = 'Не удалось загрузить список участников.';
+            document.getElementById('errorMsg').innerHTML = `Ошибка: ${err.error_type || err.message}<br>Данные: ${JSON.stringify(err.error_data)}`;
+            document.getElementById('errorMsg').style.display = 'block';
+            document.getElementById('manualPlayers').style.display = 'block';
+            document.getElementById('manualList').value = JSON.stringify([
+                { name: "Администратор", id: ADMIN_VK_ID, avatar: "" }
+            ], null, 2);
+        });
+
+        async function loadGroupMembers() {
+            const response = await vkBridge.send('VKWebAppCallAPIMethod', {
+                method: 'groups.getMembers',
+                params: {
+                    group_id: GROUP_ID,
+                    fields: 'first_name,last_name,photo_50',
+                    count: 200,
+                    access_token: userToken,
+                    v: '5.199'
+                }
+            });
+            const members = response.response.items;
+            if (!members || members.length === 0) throw new Error('Нет участников');
+            const select = document.getElementById('playerSelect');
+            select.innerHTML = '';
+            members.forEach(m => {
+                const option = document.createElement('option');
+                option.value = m.id;
+                option.textContent = `${m.first_name} ${m.last_name}`;
+                option.setAttribute('data-avatar', m.photo_50 || '');
+                select.appendChild(option);
+            });
         }
-        
-        console.log('Успешно вставлено:', data);
-        document.getElementById('message').innerText = '✅ Достижение опубликовано!';
-        document.getElementById('title').value = '';
-        document.getElementById('imageFile').value = '';
-    } catch (err) {
-        console.error('Общая ошибка:', err);
-        alert('Ошибка: ' + (err.message || err));
-    }
-};
+
+        async function uploadImage(file) {
+            const fileName = `${Date.now()}_${file.name}`;
+            const { data, error } = await supabaseClient.storage
+                .from('achievements')
+                .upload(fileName, file);
+            if (error) throw error;
+            const { data: urlData } = supabaseClient.storage
+                .from('achievements')
+                .getPublicUrl(fileName);
+            return urlData.publicUrl;
+        }
+
+        document.getElementById('submitBtn').onclick = async () => {
+            const title = document.getElementById('title').value;
+            const select = document.getElementById('playerSelect');
+            const playerId = select.value;
+            const playerName = select.options[select.selectedIndex].text;
+            const playerAvatar = select.options[select.selectedIndex].getAttribute('data-avatar') || '';
+            const file = document.getElementById('imageFile').files[0];
+
+            if (!title || !file) {
+                alert('Заполните название и выберите картинку');
+                return;
+            }
+
+            try {
+                console.log('Начинаем загрузку картинки...');
+                const imageUrl = await uploadImage(file);
+                console.log('Картинка загружена, URL:', imageUrl);
+                
+                const insertData = {
+                    title,
+                    player_name: playerName,
+                    player_vk_id: parseInt(playerId),
+                    player_avatar: playerAvatar,
+                    image_url: imageUrl
+                };
+                console.log('Вставляем в таблицу:', insertData);
+                
+                const { data, error } = await supabaseClient
+                    .from('achievements')
+                    .insert([insertData])
+                    .select();
+                    
+                if (error) {
+                    console.error('Ошибка вставки:', error);
+                    alert('Ошибка базы данных: ' + error.message);
+                    return;
+                }
+                
+                console.log('Успешно вставлено:', data);
+                document.getElementById('message').innerText = '✅ Достижение опубликовано!';
+                document.getElementById('title').value = '';
+                document.getElementById('imageFile').value = '';
+            } catch (err) {
+                console.error('Общая ошибка:', err);
+                alert('Ошибка: ' + (err.message || err));
+            }
+        };
+
+        document.getElementById('useManualBtn').onclick = () => {
+            try {
+                const players = JSON.parse(document.getElementById('manualList').value);
+                if (!Array.isArray(players)) throw new Error('Не массив');
+                const select = document.getElementById('playerSelect');
+                select.innerHTML = '';
+                players.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = p.name;
+                    option.setAttribute('data-avatar', p.avatar || '');
+                    select.appendChild(option);
+                });
+                document.getElementById('manualPlayers').style.display = 'none';
+                document.getElementById('errorMsg').style.display = 'none';
+                document.getElementById('adminContent').style.display = 'block';
+            } catch (e) {
+                alert('Ошибка в JSON. Используйте формат: [{"name":"Имя","id":123,"avatar":""}]');
+            }
+        };
+    </script>
+</body>
+</html>
