@@ -26,7 +26,6 @@
 
         vkBridge.send('VKWebAppInit');
 
-        // Проверка администратора для шестерёнки
         async function checkAdmin() {
             try {
                 const user = await vkBridge.send('VKWebAppGetUserInfo');
@@ -38,92 +37,109 @@
             }
         }
 
-        // Загрузка всех сессий и достижений
+        // Загружаем сессии и их достижения
         async function loadSessionsWithAchievements() {
-            // 1. Получаем все сессии, сортируем по дате (новые сверху)
+            // Получаем все сессии, отсортированные по дате (новые сверху)
             const { data: sessions, error: sessionsError } = await supabaseClient
                 .from('sessions')
                 .select('*')
                 .order('session_date', { ascending: false });
+
             if (sessionsError) {
                 console.error('Ошибка загрузки сессий:', sessionsError);
                 return [];
             }
 
-            // 2. Получаем все достижения
-            const { data: achievements, error: achError } = await supabaseClient
-                .from('achievements')
-                .select('*')
-                .order('order', { ascending: true });
-            if (achError) {
-                console.error('Ошибка загрузки достижений:', achError);
-                return [];
-            }
+            // Для каждой сессии получаем достижения
+            const sessionsWithAchievements = await Promise.all(sessions.map(async (session) => {
+                const { data: achievements, error: achError } = await supabaseClient
+                    .from('achievements')
+                    .select('*')
+                    .eq('session_id', session.id)
+                    .order('order', { ascending: true }); // можно сортировать по order
 
-            // 3. Группируем достижения по session_id
-            const grouped = {};
-            achievements.forEach(ach => {
-                if (!grouped[ach.session_id]) grouped[ach.session_id] = [];
-                grouped[ach.session_id].push(ach);
-            });
-
-            // 4. Соединяем сессии с достижениями
-            return sessions.map(session => ({
-                ...session,
-                achievements: grouped[session.id] || []
+                if (achError) {
+                    console.error(`Ошибка загрузки достижений для сессии ${session.id}:`, achError);
+                    return { ...session, achievements: [] };
+                }
+                return { ...session, achievements };
             }));
+
+            return sessionsWithAchievements;
         }
 
-        // Отображение сессий сеткой
+        // Отображаем сессии сеткой
         async function renderSessions() {
-            const sessions = await loadSessionsWithAchievements();
             const container = document.getElementById('sessionsList');
+            container.innerHTML = '<div class="loading">Загрузка...</div>';
+
+            const sessions = await loadSessionsWithAchievements();
+
+            if (!sessions.length) {
+                container.innerHTML = '<div class="empty">Пока нет сессий с достижениями</div>';
+                return;
+            }
+
             container.innerHTML = '';
 
             sessions.forEach(session => {
-                // Блок сессии
-                const sessionDiv = document.createElement('div');
-                sessionDiv.className = 'session-block';
+                const sessionBlock = document.createElement('div');
+                sessionBlock.className = 'session-block';
 
                 // Заголовок сессии
-                const titleDiv = document.createElement('div');
-                titleDiv.className = 'session-title';
-                // Форматируем дату: из ISO в DD.MM.YYYY
-                const date = new Date(session.session_date);
-                const formattedDate = date.toLocaleDateString('ru-RU');
-                titleDiv.textContent = session.title || `Сессия ${formattedDate}`;
-                sessionDiv.appendChild(titleDiv);
+                const sessionHeader = document.createElement('div');
+                sessionHeader.className = 'session-header';
+                const formattedDate = new Date(session.session_date).toLocaleDateString('ru-RU');
+                sessionHeader.innerHTML = `<h2>📅 Сессия ${formattedDate}</h2>`;
+                if (session.title && session.title !== `Сессия ${formattedDate}`) {
+                    sessionHeader.innerHTML += `<p class="session-title">${escapeHtml(session.title)}</p>`;
+                }
+                sessionBlock.appendChild(sessionHeader);
 
                 // Сетка достижений
-                const gridDiv = document.createElement('div');
-                gridDiv.className = 'achievements-grid';
+                const grid = document.createElement('div');
+                grid.className = 'achievements-grid';
+
                 session.achievements.forEach(ach => {
                     const card = document.createElement('div');
-                    card.className = 'achievement-card-grid';
+                    card.className = 'achievement-card';
 
-                    // Картинка (единый размер)
+                    // Картинка
                     const img = document.createElement('img');
                     img.src = ach.image_url;
-                    img.className = 'achievement-img-grid';
+                    img.className = 'achievement-img';
                     img.onclick = () => vkBridge.send('VKWebAppShowImages', { images: [ach.image_url] });
                     img.onerror = () => { img.src = 'https://via.placeholder.com/200?text=No+Image'; };
 
-                    // Имя игрока + текст достижения
+                    // Имя игрока
                     const playerName = document.createElement('div');
                     playerName.className = 'player-name';
-                    playerName.innerHTML = `<a href="https://vk.com/id${ach.player_vk_id}" target="_blank">${ach.player_name}</a>`;
-                    
-                    const achText = document.createElement('div');
-                    achText.className = 'achievement-text';
-                    achText.textContent = ach.achievement_text;
+                    playerName.innerHTML = `<a href="https://vk.com/id${ach.player_vk_id}" target="_blank">${escapeHtml(ach.player_name)}</a>`;
+
+                    // Текст достижения
+                    const text = document.createElement('div');
+                    text.className = 'achievement-text';
+                    text.textContent = ach.achievement_text;
 
                     card.appendChild(img);
                     card.appendChild(playerName);
-                    card.appendChild(achText);
-                    gridDiv.appendChild(card);
+                    card.appendChild(text);
+                    grid.appendChild(card);
                 });
-                sessionDiv.appendChild(gridDiv);
-                container.appendChild(sessionDiv);
+
+                sessionBlock.appendChild(grid);
+                container.appendChild(sessionBlock);
+            });
+        }
+
+        // Простая защита от XSS
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
             });
         }
 
