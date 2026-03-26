@@ -3,20 +3,28 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-    <title>D&D Достижения</title>
+    <title>Админка D&D</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <div id="app">
-        <div id="header">
-            <h1>🏆 Достижения</h1>
-            <div id="adminButton" style="display:none;">
-                <a href="admin.html">⚙️</a>
-            </div>
+    <div id="admin-panel">
+        <h2>Добавить достижение</h2>
+        <div id="loading">Проверка прав...</div>
+        <div id="adminContent" style="display:none;">
+            <label>Выберите игрока:</label>
+            <select id="playerSelect"></select>
+            <input type="text" id="title" placeholder="Название достижения" />
+            <input type="file" id="imageFile" accept="image/*" />
+            <button id="submitBtn">Опубликовать</button>
+            <div id="message"></div>
         </div>
-        <div id="achievementsList"></div>
+        <div id="manualPlayers" style="display:none; margin-top:10px;">
+            <label>Введите список игроков в формате JSON:</label>
+            <textarea id="manualList" rows="4" placeholder='[{"name":"Игрок 1","id":123456789}]'></textarea>
+            <button id="useManualBtn">Применить список</button>
+        </div>
     </div>
     <script>
         const SUPABASE_URL = 'https://jrwgibmbjaoogsdnukzi.supabase.co';
@@ -24,55 +32,84 @@
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const ADMIN_VK_ID = 162536789;
 
-        vkBridge.send('VKWebAppInit');
+        vkBridge.send('VKWebAppInit').then(() => {
+            return vkBridge.send('VKWebAppGetUserInfo');
+        }).then(user => {
+            if (user.id !== ADMIN_VK_ID) {
+                document.getElementById('loading').innerHTML = 'Доступ запрещён. Вы не администратор.';
+                return;
+            }
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('manualPlayers').style.display = 'block';
+            document.getElementById('manualList').value = JSON.stringify([
+                { name: "Администратор", id: ADMIN_VK_ID }
+            ], null, 2);
+        }).catch(err => {
+            console.error(err);
+            document.getElementById('loading').innerHTML = 'Ошибка инициализации. Перезагрузите страницу.';
+        });
 
-        async function checkAdmin() {
+        document.getElementById('useManualBtn').onclick = () => {
             try {
-                const user = await vkBridge.send('VKWebAppGetUserInfo');
-                if (user.id === ADMIN_VK_ID) {
-                    document.getElementById('adminButton').style.display = 'block';
-                }
+                const players = JSON.parse(document.getElementById('manualList').value);
+                if (!Array.isArray(players)) throw new Error('Не массив');
+                const select = document.getElementById('playerSelect');
+                select.innerHTML = '';
+                players.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = p.name;
+                    select.appendChild(option);
+                });
+                document.getElementById('manualPlayers').style.display = 'none';
+                document.getElementById('adminContent').style.display = 'block';
             } catch (e) {
-                console.error(e);
+                alert('Ошибка в JSON. Используйте формат: [{"name":"Имя","id":123}]');
             }
-        }
+        };
 
-        async function loadAchievements() {
-            const { data, error } = await supabaseClient
+        async function uploadImage(file) {
+            const fileName = `${Date.now()}_${file.name}`;
+            const { data, error } = await supabaseClient.storage
                 .from('achievements')
-                .select('*')
-                .order('created_at', { ascending: false });
-            if (error) {
-                console.error(error);
-                return [];
+                .upload(fileName, file);
+            if (error) throw error;
+            const { data: urlData } = supabaseClient.storage
+                .from('achievements')
+                .getPublicUrl(fileName);
+            return urlData.publicUrl;
+        }
+
+        document.getElementById('submitBtn').onclick = async () => {
+            const title = document.getElementById('title').value;
+            const playerId = document.getElementById('playerSelect').value;
+            const playerName = document.getElementById('playerSelect').options[document.getElementById('playerSelect').selectedIndex].text;
+            const file = document.getElementById('imageFile').files[0];
+
+            if (!title || !file) {
+                alert('Заполните название и выберите картинку');
+                return;
             }
-            return data;
-        }
 
-        async function renderList() {
-            const achievements = await loadAchievements();
-            const container = document.getElementById('achievementsList');
-            container.innerHTML = '';
-            achievements.forEach(ach => {
-                const card = document.createElement('div');
-                card.className = 'achievement-card';
-                const img = document.createElement('img');
-                img.src = ach.image_url;
-                img.className = 'achievement-img';
-                img.onclick = () => vkBridge.send('VKWebAppShowImages', { images: [ach.image_url] });
-                const title = document.createElement('h3');
-                title.textContent = ach.title;
-                const player = document.createElement('p');
-                player.innerHTML = `Игрок: <a href="https://vk.com/id${ach.player_vk_id}" target="_blank">${ach.player_name}</a>`;
-                card.appendChild(img);
-                card.appendChild(title);
-                card.appendChild(player);
-                container.appendChild(card);
-            });
-        }
-
-        checkAdmin();
-        renderList();
+            try {
+                const imageUrl = await uploadImage(file);
+                const { error } = await supabaseClient
+                    .from('achievements')
+                    .insert([{
+                        title,
+                        player_name: playerName,
+                        player_vk_id: parseInt(playerId),
+                        image_url: imageUrl
+                    }]);
+                if (error) throw error;
+                document.getElementById('message').innerText = '✅ Достижение опубликовано!';
+                document.getElementById('title').value = '';
+                document.getElementById('imageFile').value = '';
+            } catch (err) {
+                console.error(err);
+                alert('Ошибка: ' + err.message);
+            }
+        };
     </script>
 </body>
 </html>
