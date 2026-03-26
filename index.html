@@ -33,7 +33,7 @@
                     document.getElementById('adminButton').style.display = 'block';
                 }
             } catch (e) {
-                console.error('Ошибка получения пользователя', e);
+                console.error(e);
             }
         }
 
@@ -43,7 +43,7 @@
                 .select('*')
                 .order('created_at', { ascending: false });
             if (error) {
-                console.error('Ошибка загрузки достижений', error);
+                console.error(error);
                 return [];
             }
             return data;
@@ -56,38 +56,17 @@
             achievements.forEach(ach => {
                 const card = document.createElement('div');
                 card.className = 'achievement-card';
-                
-                // Картинка достижения (единое соотношение 16:9 через CSS)
                 const img = document.createElement('img');
                 img.src = ach.image_url;
                 img.className = 'achievement-img';
                 img.onclick = () => vkBridge.send('VKWebAppShowImages', { images: [ach.image_url] });
-                img.onerror = () => { img.src = 'https://via.placeholder.com/300x169?text=No+Image'; };
-                
                 const title = document.createElement('h3');
                 title.textContent = ach.title;
-                
-                const playerDiv = document.createElement('div');
-                playerDiv.className = 'player-info';
-                
-                // Аватарка игрока
-                if (ach.player_avatar) {
-                    const avatar = document.createElement('img');
-                    avatar.src = ach.player_avatar;
-                    avatar.className = 'player-avatar';
-                    avatar.onerror = () => { avatar.style.display = 'none'; };
-                    playerDiv.appendChild(avatar);
-                }
-                
-                const playerLink = document.createElement('a');
-                playerLink.href = `https://vk.com/id${ach.player_vk_id}`;
-                playerLink.target = '_blank';
-                playerLink.textContent = ach.player_name;
-                playerDiv.appendChild(playerLink);
-                
+                const player = document.createElement('p');
+                player.innerHTML = `Игрок: <a href="https://vk.com/id${ach.player_vk_id}" target="_blank">${ach.player_name}</a>`;
                 card.appendChild(img);
                 card.appendChild(title);
-                card.appendChild(playerDiv);
+                card.appendChild(player);
                 container.appendChild(card);
             });
         }
