@@ -45,7 +45,6 @@ body {
     background: #3c3c3c;
 }
 
-/* Стили для админки (кнопка назад) */
 .back-button {
     background: #3c3c3c;
 }
@@ -176,6 +175,50 @@ button.secondary {
 button.secondary:hover {
     background: #4c4c4c;
 }
+
+/* Теги (чипы) для добавленных достижений */
+.tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 8px;
+    background: #1e1e1e;
+    border-radius: 12px;
+    min-height: 40px;
+}
+.tag {
+    display: inline-flex;
+    align-items: center;
+    background: #2c2c2c;
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 14px;
+    gap: 6px;
+    transition: all 0.1s;
+}
+.tag.complete {
+    background: #2c5a2c;
+    color: #fff;
+}
+.tag.incomplete {
+    background: #5a2c2c;
+    color: #ffaaaa;
+}
+.tag .tag-remove {
+    cursor: pointer;
+    font-weight: bold;
+    margin-left: 4px;
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 16px;
+    padding: 0 2px;
+}
+.tag .tag-remove:hover {
+    color: #ff8888;
+}
+
 /* Блок достижения (карточка в админке) */
 .achievement-block {
     background: #2c2c2c;
@@ -183,7 +226,7 @@ button.secondary:hover {
     padding: 12px;
     margin-bottom: 12px;
     position: relative;
-    border-left: 4px solid #4caf50; /* зелёная полоса, если заполнено */
+    border-left: 4px solid #4caf50;
 }
 .achievement-block.incomplete {
     border-left-color: #ff4444;
@@ -214,7 +257,6 @@ button.secondary:hover {
     border-radius: 8px;
     cursor: pointer;
 }
-/* Статус заполненности */
 .block-status {
     font-size: 12px;
     margin-top: 8px;
