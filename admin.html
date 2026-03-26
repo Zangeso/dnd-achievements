@@ -19,109 +19,67 @@
             <button id="submitBtn">Опубликовать</button>
             <div id="message"></div>
         </div>
-        <div id="errorMsg" style="display:none; color:red; margin-top:10px;"></div>
-        <div id="manualPlayers" style="display:none; margin-top:10px;">
-            <label>Ручной ввод игроков (если список не загрузился):</label>
-            <textarea id="manualList" rows="3" placeholder='[{"name":"Алексей","id":123456789},{"name":"Мария","id":987654321}]'></textarea>
-            <button id="useManualBtn">Использовать этот список</button>
-        </div>
+        <div id="errorMsg" style="display:none; color:red;"></div>
     </div>
     <script>
-        // ---------- НАСТРОЙКИ (ВАШИ) ----------
+        // ---------- НАСТРОЙКИ (УЖЕ ЗАПОЛНЕНЫ) ----------
         const APP_ID = 54508090;
-        const GROUP_ID = 236712001;
-        const ALBUM_ID = 310403391;
+        const GROUP_ID = 236712001;      // положительный ID группы
+        const ALBUM_ID = 310403391;      // ID альбома
         const STORAGE_KEY = 'dnd_achievements';
-        // ------------------------------------
+        // ----------------------------------------------
 
-        // Проверяем, что мы внутри VK
-        if (!window.vkBridge) {
-            document.getElementById('loading').innerHTML = 'Ошибка: приложение запущено вне VK. Откройте его через группу или https://vk.com/app54508090';
-        } else {
-            vkBridge.send('VKWebAppInit');
-        }
+        let communityToken = null;
 
-        // Запрашиваем токен только для photos и storage (groups не обязателен)
-        vkBridge.send('VKWebAppGetAuthToken', {
-            app_id: APP_ID,
-            scope: 'photos,storage'
+        vkBridge.send('VKWebAppInit').then(() => {
+            // Запрашиваем токен сообщества
+            return vkBridge.send('VKWebAppGetCommunityToken', {
+                app_id: APP_ID,
+                group_id: GROUP_ID,
+                scope: 'photos,groups,storage'
+            });
+        }).then(data => {
+            console.log('Токен сообщества получен:', data);
+            communityToken = data.access_token;
+            // После получения токена загружаем участников
+            return loadGroupMembers();
         }).then(() => {
-            console.log('Токен photos+storage получен');
-            // Далее пытаемся загрузить участников, но если не получится — покажем ручной ввод
-            loadGroupMembersWithFallback();
+            // Скрываем загрузку, показываем форму
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('adminContent').style.display = 'block';
         }).catch(err => {
-            console.error('Ошибка получения токена:', err);
-            document.getElementById('loading').innerHTML = 'Не удалось получить разрешения. Перезагрузите страницу и разрешите доступ. Если ошибка повторяется, используйте ручной ввод игроков.';
-            // Всё равно показываем ручной ввод, чтобы можно было добавить достижение
-            showManualInputFallback();
+            console.error('Ошибка:', err);
+            document.getElementById('loading').innerHTML = 'Не удалось получить токен сообщества. Убедитесь, что вы администратор группы и приложение добавлено в сообщество.';
+            document.getElementById('errorMsg').innerText = 'Ошибка: ' + (err.error_type || err.message);
+            document.getElementById('errorMsg').style.display = 'block';
         });
 
-        async function loadGroupMembersWithFallback() {
+        // Загрузка участников группы (использует токен сообщества)
+        async function loadGroupMembers() {
             try {
-                // Пытаемся получить участников группы (нужен groups, но если нет прав, будет ошибка)
                 const response = await vkBridge.send('VKWebAppCallAPIMethod', {
                     method: 'groups.getMembers',
                     params: {
                         group_id: GROUP_ID,
                         fields: 'first_name,last_name',
-                        count: 200
+                        count: 200,
+                        access_token: communityToken   // обязательно передаём токен
                     }
                 });
                 const members = response.response.items;
-                if (members && members.length) {
-                    const select = document.getElementById('playerSelect');
-                    select.innerHTML = '';
-                    members.forEach(m => {
-                        const option = document.createElement('option');
-                        option.value = m.id;
-                        option.textContent = `${m.first_name} ${m.last_name}`;
-                        select.appendChild(option);
-                    });
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('adminContent').style.display = 'block';
-                    document.getElementById('manualPlayers').style.display = 'none';
-                    return;
-                }
-                throw new Error('Список участников пуст');
-            } catch (e) {
-                console.error('Не удалось загрузить участников:', e);
-                showManualInputFallback();
-            }
-        }
-
-        function showManualInputFallback() {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('manualPlayers').style.display = 'block';
-            document.getElementById('errorMsg').style.display = 'block';
-            document.getElementById('errorMsg').innerText = 'Автоматическая загрузка участников не удалась. Введите список игроков вручную (JSON). После этого форма станет доступна.';
-            // Предзаполняем примером
-            document.getElementById('manualList').value = JSON.stringify([
-                { name: "Алексей", id: 162536789 },  // ваш ID для примера
-                { name: "Другой игрок", id: 987654321 }
-            ], null, 2);
-        }
-
-        // Обработка ручного списка
-        document.getElementById('useManualBtn').onclick = () => {
-            try {
-                const manualText = document.getElementById('manualList').value;
-                const players = JSON.parse(manualText);
-                if (!Array.isArray(players)) throw new Error('Не массив');
                 const select = document.getElementById('playerSelect');
                 select.innerHTML = '';
-                players.forEach(p => {
+                members.forEach(m => {
                     const option = document.createElement('option');
-                    option.value = p.id;
-                    option.textContent = p.name;
+                    option.value = m.id;
+                    option.textContent = `${m.first_name} ${m.last_name}`;
                     select.appendChild(option);
                 });
-                document.getElementById('manualPlayers').style.display = 'none';
-                document.getElementById('errorMsg').style.display = 'none';
-                document.getElementById('adminContent').style.display = 'block';
             } catch (e) {
-                alert('Ошибка в формате JSON. Используйте формат: [{"name":"Имя","id":123}]');
+                console.error('Ошибка загрузки участников:', e);
+                throw e;
             }
-        };
+        }
 
         // Публикация достижения
         document.getElementById('submitBtn').onclick = async () => {
@@ -136,21 +94,24 @@
             }
 
             try {
-                // 1. Загружаем фото в альбом группы
+                // 1. Получаем сервер для загрузки фото
                 const uploadServerRes = await vkBridge.send('VKWebAppCallAPIMethod', {
                     method: 'photos.getUploadServer',
-                    params: { group_id: GROUP_ID, album_id: ALBUM_ID }
+                    params: {
+                        group_id: GROUP_ID,
+                        album_id: ALBUM_ID,
+                        access_token: communityToken
+                    }
                 });
                 const uploadUrl = uploadServerRes.response.upload_url;
 
+                // 2. Загружаем файл
                 const formData = new FormData();
                 formData.append('file', file);
-                const uploadResponse = await fetch(uploadUrl, {
-                    method: 'POST',
-                    body: formData
-                });
+                const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: formData });
                 const uploadData = await uploadResponse.json();
 
+                // 3. Сохраняем фото в альбоме
                 const saveRes = await vkBridge.send('VKWebAppCallAPIMethod', {
                     method: 'photos.save',
                     params: {
@@ -158,17 +119,27 @@
                         album_id: ALBUM_ID,
                         server: uploadData.server,
                         photos_list: uploadData.photos_list,
-                        hash: uploadData.hash
+                        hash: uploadData.hash,
+                        access_token: communityToken
                     }
                 });
                 const photo = saveRes.response[0];
                 const photoUrl = photo.sizes[photo.sizes.length-1].url;
 
-                // 2. Получаем текущие достижения из Storage
-                const storageRes = await vkBridge.send('VKWebAppStorageGet', { keys: [STORAGE_KEY] });
-                let achievements = storageRes.keys[0]?.value ? JSON.parse(storageRes.keys[0].value) : [];
+                // 4. Получаем текущие достижения из Storage (токен сообщества)
+                const storageRes = await vkBridge.send('VKWebAppCallAPIMethod', {
+                    method: 'storage.get',
+                    params: {
+                        key: STORAGE_KEY,
+                        access_token: communityToken
+                    }
+                });
+                let achievements = [];
+                if (storageRes.response && storageRes.response.value) {
+                    achievements = JSON.parse(storageRes.response.value);
+                }
 
-                // 3. Добавляем новое
+                // 5. Добавляем новое
                 achievements.push({
                     title: title,
                     playerName: playerName,
@@ -177,10 +148,14 @@
                     timestamp: Date.now()
                 });
 
-                // 4. Сохраняем обратно
-                await vkBridge.send('VKWebAppStorageSet', {
-                    key: STORAGE_KEY,
-                    value: JSON.stringify(achievements)
+                // 6. Сохраняем обратно
+                await vkBridge.send('VKWebAppCallAPIMethod', {
+                    method: 'storage.set',
+                    params: {
+                        key: STORAGE_KEY,
+                        value: JSON.stringify(achievements),
+                        access_token: communityToken
+                    }
                 });
 
                 document.getElementById('message').innerText = '✅ Достижение опубликовано!';
@@ -188,7 +163,7 @@
                 document.getElementById('imageFile').value = '';
             } catch (err) {
                 console.error(err);
-                alert('Ошибка: ' + (err.message || err));
+                alert('Ошибка: ' + (err.message || JSON.stringify(err)));
             }
         };
     </script>
