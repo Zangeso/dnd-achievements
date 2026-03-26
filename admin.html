@@ -35,7 +35,7 @@
         const APP_ID = 54508090;
         const ADMIN_VK_ID = 162536789;
 
-        let communityToken = null;
+        let userToken = null;
         let currentUserId = null;
 
         vkBridge.send('VKWebAppInit').then(() => {
@@ -49,15 +49,14 @@
             // Устанавливаем сессию в Supabase (для RLS)
             return supabaseClient.rpc('set_user_id', { user_id: currentUserId });
         }).then(() => {
-            // Запрашиваем токен сообщества с правами manage (даёт доступ к администрированию)
-            return vkBridge.send('VKWebAppGetCommunityToken', {
+            // Запрашиваем пользовательский токен с правами groups
+            return vkBridge.send('VKWebAppGetAuthToken', {
                 app_id: APP_ID,
-                group_id: GROUP_ID,
-                scope: 'manage'   // ключевое изменение: manage вместо groups
+                scope: 'groups'
             });
         }).then(data => {
-            communityToken = data.access_token;
-            console.log('Токен сообщества получен');
+            userToken = data.access_token;
+            console.log('Пользовательский токен получен');
             return loadGroupMembers();
         }).then(() => {
             document.getElementById('loading').style.display = 'none';
@@ -82,7 +81,7 @@
                     group_id: GROUP_ID,
                     fields: 'first_name,last_name',
                     count: 200,
-                    access_token: communityToken
+                    access_token: userToken
                 }
             });
             const members = response.response.items;
