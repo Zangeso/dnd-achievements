@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <title>D&D Достижения</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://vk.com/js/api/openapi.js?169"></script>
     <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
 </head>
 <body>
@@ -14,33 +13,32 @@
         <div id="achievementsList"></div>
     </div>
     <script>
+        // Ключ для хранения достижений в VK Storage
+        const STORAGE_KEY = 'dnd_achievements';
+
         // Инициализация VK Bridge
         vkBridge.send('VKWebAppInit');
 
-        // Ключ для хранения достижений в VK Storage
-        const STORAGE_KEY = 'achievements_list';
-
-        // Функция загрузки достижений из Storage
+        // Загрузка достижений
         async function loadAchievements() {
             try {
                 const result = await vkBridge.send('VKWebAppStorageGet', { keys: [STORAGE_KEY] });
                 if (result.keys[0] && result.keys[0].value) {
                     return JSON.parse(result.keys[0].value);
-                } else {
-                    return []; // пустой список
                 }
+                return [];
             } catch (e) {
-                console.error(e);
+                console.error('Ошибка загрузки:', e);
                 return [];
             }
         }
 
-        // Отображение достижений
+        // Отображение ленты
         async function renderList() {
             const achievements = await loadAchievements();
             const container = document.getElementById('achievementsList');
             container.innerHTML = '';
-            // Сортируем по дате (новые сверху) — предполагаем, что у каждого достижения есть timestamp
+            // Сортируем по времени (новые сверху)
             achievements.sort((a, b) => b.timestamp - a.timestamp);
             achievements.forEach(ach => {
                 const card = document.createElement('div');
