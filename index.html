@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>D&D Достижения</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://vk.com/js/api/openapi.js?169"></script>
+    <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <h1>🏆 Достижения</h1>
+        <div id="achievementsList"></div>
+    </div>
+    <script>
+        // Инициализация VK Bridge
+        vkBridge.send('VKWebAppInit');
+
+        // Ключ для хранения достижений в VK Storage
+        const STORAGE_KEY = 'achievements_list';
+
+        // Функция загрузки достижений из Storage
+        async function loadAchievements() {
+            try {
+                const result = await vkBridge.send('VKWebAppStorageGet', { keys: [STORAGE_KEY] });
+                if (result.keys[0] && result.keys[0].value) {
+                    return JSON.parse(result.keys[0].value);
+                } else {
+                    return []; // пустой список
+                }
+            } catch (e) {
+                console.error(e);
+                return [];
+            }
+        }
+
+        // Отображение достижений
+        async function renderList() {
+            const achievements = await loadAchievements();
+            const container = document.getElementById('achievementsList');
+            container.innerHTML = '';
+            // Сортируем по дате (новые сверху) — предполагаем, что у каждого достижения есть timestamp
+            achievements.sort((a, b) => b.timestamp - a.timestamp);
+            achievements.forEach(ach => {
+                const card = document.createElement('div');
+                card.className = 'achievement-card';
+                // Картинка
+                const img = document.createElement('img');
+                img.src = ach.photoUrl;
+                img.className = 'achievement-img';
+                img.onclick = () => vkBridge.send('VKWebAppShowImages', { images: [ach.photoUrl] });
+                // Название
+                const title = document.createElement('h3');
+                title.textContent = ach.title;
+                // Игрок
+                const player = document.createElement('p');
+                player.innerHTML = `Игрок: <a href="https://vk.com/id${ach.playerId}" target="_blank">${ach.playerName}</a>`;
+                card.appendChild(img);
+                card.appendChild(title);
+                card.appendChild(player);
+                container.appendChild(card);
+            });
+        }
+
+        renderList();
+    </script>
+</body>
+</html>
