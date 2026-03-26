@@ -14,29 +14,43 @@ body {
     margin: 0 auto;
 }
 
-/* Шапка с шестерёнкой */
+/* Шапка (общая для админки и ленты) */
 #header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 #header h1 {
     font-size: 1.8rem;
     margin: 0;
 }
-#adminButton a {
-    font-size: 24px;
-    text-decoration: none;
+#header .buttons {
+    display: flex;
+    gap: 12px;
+}
+#adminButton a, .back-button {
+    display: inline-block;
     background: #2c2c2c;
     color: #e0e0e0;
     padding: 8px 12px;
     border-radius: 20px;
-    display: inline-block;
+    text-decoration: none;
+    font-size: 14px;
     transition: background 0.2s;
 }
-#adminButton a:hover {
+#adminButton a:hover, .back-button:hover {
     background: #3c3c3c;
+}
+
+/* Стили для админки (кнопка назад) */
+.back-button {
+    background: #3c3c3c;
+}
+.back-button:hover {
+    background: #4c4c4c;
 }
 
 /* ========== ЛЕНТА (сессии) ========== */
@@ -75,7 +89,7 @@ body {
 }
 .achievements-grid .achievement-img {
     width: 100%;
-    aspect-ratio: 1 / 1; /* квадрат, можно изменить на 16/9 */
+    aspect-ratio: 1 / 1;
     object-fit: cover;
     border-radius: 12px;
     margin-bottom: 8px;
@@ -162,12 +176,17 @@ button.secondary {
 button.secondary:hover {
     background: #4c4c4c;
 }
+/* Блок достижения (карточка в админке) */
 .achievement-block {
     background: #2c2c2c;
     border-radius: 12px;
     padding: 12px;
     margin-bottom: 12px;
     position: relative;
+    border-left: 4px solid #4caf50; /* зелёная полоса, если заполнено */
+}
+.achievement-block.incomplete {
+    border-left-color: #ff4444;
 }
 .achievement-block .remove-btn {
     position: absolute;
@@ -195,6 +214,22 @@ button.secondary:hover {
     border-radius: 8px;
     cursor: pointer;
 }
+/* Статус заполненности */
+.block-status {
+    font-size: 12px;
+    margin-top: 8px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    display: inline-block;
+    background: #1e1e1e;
+}
+.block-status.complete {
+    color: #4caf50;
+}
+.block-status.incomplete {
+    color: #ff8888;
+}
+
 #loading, #errorMsg, #message {
     text-align: center;
     margin: 20px;
@@ -240,24 +275,4 @@ button.secondary:hover {
     gap: 12px;
     margin-top: 12px;
     justify-content: center;
-}
-#backToMain {
-    position: fixed;
-    top: 16px;
-    left: 16px;
-    background: #2c2c2c;
-    border: none;
-    border-radius: 20px;
-    padding: 8px 12px;
-    color: #e0e0e0;
-    cursor: pointer;
-    z-index: 100;
-    font-size: 14px;
-}
-#backToMain:hover {
-    background: #3c3c3c;
-}
-#blocksCounter {
-    font-size: 0.9rem;
-    color: #4caf50;
 }
