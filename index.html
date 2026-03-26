@@ -19,11 +19,10 @@
         <div id="achievementsList"></div>
     </div>
     <script>
-        // ---------- ВСТАВЬТЕ СВОИ ДАННЫЕ ----------
-        const SUPABASE_URL = 'https://jrwgibmbjaoogsdnukzi.supabase.co';   // замените
-        const SUPABASE_ANON_KEY = 'sb_publishable_UjoyHMlGvIvQMxKTENAUMQ_OE3GtvON';    // замените
-        // -----------------------------------------
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Данные Supabase
+        const SUPABASE_URL = 'https://jrwgibmbjaoogsdnukzi.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_UjoyHMlGvIvQMxKTENAUMQ_OE3GtvON';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const GROUP_ID = 236712001;   // ID вашей группы (положительный)
 
         vkBridge.send('VKWebAppInit');
@@ -45,7 +44,7 @@
         }
 
         async function loadAchievements() {
-            const { data, error } = await supabase
+            const { data, error } = await supabaseClient
                 .from('achievements')
                 .select('*')
                 .order('created_at', { ascending: false });
