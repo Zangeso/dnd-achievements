@@ -10,7 +10,7 @@
 <body>
     <div id="admin-panel">
         <h2>Добавить достижение</h2>
-        <div id="loading">Загрузка списка игроков...</div>
+        <div id="loading">Загрузка...</div>
         <div id="adminContent" style="display:none;">
             <label>Выберите игрока:</label>
             <select id="playerSelect"></select>
@@ -22,54 +22,87 @@
     </div>
     <script>
         // ---------- НАСТРОЙКИ (ЗАМЕНИТЕ НА СВОИ) ----------
-        const GROUP_ID = 236712001;        // положительный ID группы (без минуса)
+        const GROUP_ID = 236712001;        // положительный ID группы
         const ALBUM_ID = 310403391;        // ID альбома
         const STORAGE_KEY = 'dnd_achievements';
+        const APP_ID = ВАШ_ID_ПРИЛОЖЕНИЯ;   // ID вашего Mini App (число)
         // -------------------------------------------------
 
         vkBridge.send('VKWebAppInit');
 
-        // Получаем список участников группы
+        let accessToken = null;
+
+        // Запрашиваем токен с нужными правами
+        async function getToken() {
+            try {
+                const result = await vkBridge.send('VKWebAppGetAuthToken', {
+                    app_id: APP_ID,
+                    scope: 'photos,storage,groups'
+                });
+                accessToken = result.access_token;
+                return accessToken;
+            } catch (e) {
+                console.error('Ошибка получения токена:', e);
+                alert('Не удалось получить доступ. Пожалуйста, разрешите запрошенные права.');
+                throw e;
+            }
+        }
+
+        // Универсальный вызов метода API с токеном
+        async function callApi(method, params = {}) {
+            if (!accessToken) await getToken();
+            params.access_token = accessToken;
+            params.v = '5.131';
+            const result = await vkBridge.send('VKWebAppCallAPIMethod', {
+                method: method,
+                params: params
+            });
+            return result.response;
+        }
+
+        // Загрузка списка участников группы
         async function loadGroupMembers() {
             try {
-                // Запрашиваем первых 200 участников (можно больше, если нужно)
-                const response = await vkBridge.send('VKWebAppCallAPIMethod', {
-                    method: 'groups.getMembers',
-                    params: {
-                        group_id: GROUP_ID,
-                        fields: 'first_name,last_name',
-                        count: 200
-                    }
+                const members = await callApi('groups.getMembers', {
+                    group_id: GROUP_ID,
+                    fields: 'first_name,last_name',
+                    count: 200
                 });
-                const members = response.response.items;
-                return members.map(m => ({
+                return members.items.map(m => ({
                     name: `${m.first_name} ${m.last_name}`,
                     id: m.id
                 }));
             } catch (e) {
                 console.error('Ошибка загрузки участников:', e);
-                alert('Не удалось загрузить список игроков. Убедитесь, что приложение имеет право "groups".');
+                alert('Не удалось загрузить список игроков. Убедитесь, что вы разрешили доступ.');
                 return [];
             }
         }
 
         // Заполнить выпадающий список
         async function initAdmin() {
-            const members = await loadGroupMembers();
-            if (members.length === 0) {
-                document.getElementById('loading').innerText = 'Не удалось загрузить список игроков.';
-                return;
+            document.getElementById('loading').innerText = 'Запрашиваем доступ...';
+            try {
+                await getToken();
+                document.getElementById('loading').innerText = 'Загружаем список игроков...';
+                const members = await loadGroupMembers();
+                if (members.length === 0) {
+                    document.getElementById('loading').innerText = 'Список игроков пуст или недоступен.';
+                    return;
+                }
+                const select = document.getElementById('playerSelect');
+                select.innerHTML = '';
+                members.forEach(m => {
+                    const option = document.createElement('option');
+                    option.value = m.id;
+                    option.textContent = m.name;
+                    select.appendChild(option);
+                });
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('adminContent').style.display = 'block';
+            } catch (err) {
+                document.getElementById('loading').innerText = 'Ошибка: ' + err.message;
             }
-            const select = document.getElementById('playerSelect');
-            select.innerHTML = '';
-            members.forEach(m => {
-                const option = document.createElement('option');
-                option.value = m.id;
-                option.textContent = m.name;
-                select.appendChild(option);
-            });
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('adminContent').style.display = 'block';
         }
 
         // Публикация достижения
@@ -86,11 +119,11 @@
 
             try {
                 // 1. Получаем сервер для загрузки фото
-                const uploadServerRes = await vkBridge.send('VKWebAppCallAPIMethod', {
-                    method: 'photos.getUploadServer',
-                    params: { group_id: GROUP_ID, album_id: ALBUM_ID }
+                const uploadData = await callApi('photos.getUploadServer', {
+                    group_id: GROUP_ID,
+                    album_id: ALBUM_ID
                 });
-                const uploadUrl = uploadServerRes.response.upload_url;
+                const uploadUrl = uploadData.upload_url;
 
                 // 2. Загружаем файл
                 const formData = new FormData();
@@ -99,20 +132,17 @@
                     method: 'POST',
                     body: formData
                 });
-                const uploadData = await uploadResponse.json();
+                const uploadResult = await uploadResponse.json();
 
                 // 3. Сохраняем фото в альбоме
-                const saveRes = await vkBridge.send('VKWebAppCallAPIMethod', {
-                    method: 'photos.save',
-                    params: {
-                        group_id: GROUP_ID,
-                        album_id: ALBUM_ID,
-                        server: uploadData.server,
-                        photos_list: uploadData.photos_list,
-                        hash: uploadData.hash
-                    }
+                const saveResult = await callApi('photos.save', {
+                    group_id: GROUP_ID,
+                    album_id: ALBUM_ID,
+                    server: uploadResult.server,
+                    photos_list: uploadResult.photos_list,
+                    hash: uploadResult.hash
                 });
-                const photo = saveRes.response[0];
+                const photo = saveResult[0];
                 const photoUrl = photo.sizes[photo.sizes.length-1].url;
 
                 // 4. Получаем текущие достижения из Storage
@@ -131,7 +161,7 @@
                     timestamp: Date.now()
                 });
 
-                // 6. Сохраняем обратно
+                // 6. Сохраняем обратно в Storage
                 await vkBridge.send('VKWebAppStorageSet', {
                     key: STORAGE_KEY,
                     value: JSON.stringify(achievements)
@@ -146,7 +176,7 @@
             }
         };
 
-        // Запускаем админку
+        // Запускаем
         initAdmin();
     </script>
 </body>
