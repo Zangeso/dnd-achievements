@@ -33,7 +33,7 @@
                     document.getElementById('adminButton').style.display = 'block';
                 }
             } catch (e) {
-                console.error(e);
+                console.error('Ошибка получения пользователя', e);
             }
         }
 
@@ -43,7 +43,7 @@
                 .select('*')
                 .order('created_at', { ascending: false });
             if (error) {
-                console.error(error);
+                console.error('Ошибка загрузки достижений', error);
                 return [];
             }
             return data;
@@ -57,10 +57,12 @@
                 const card = document.createElement('div');
                 card.className = 'achievement-card';
                 
+                // Картинка достижения (единое соотношение 16:9 через CSS)
                 const img = document.createElement('img');
                 img.src = ach.image_url;
                 img.className = 'achievement-img';
                 img.onclick = () => vkBridge.send('VKWebAppShowImages', { images: [ach.image_url] });
+                img.onerror = () => { img.src = 'https://via.placeholder.com/300x169?text=No+Image'; };
                 
                 const title = document.createElement('h3');
                 title.textContent = ach.title;
@@ -68,11 +70,12 @@
                 const playerDiv = document.createElement('div');
                 playerDiv.className = 'player-info';
                 
-                // Аватарка
+                // Аватарка игрока
                 if (ach.player_avatar) {
                     const avatar = document.createElement('img');
                     avatar.src = ach.player_avatar;
                     avatar.className = 'player-avatar';
+                    avatar.onerror = () => { avatar.style.display = 'none'; };
                     playerDiv.appendChild(avatar);
                 }
                 
