@@ -225,3 +225,49 @@ a:hover {
         transform: translateY(0);
     }
 }
+
+/* Блок сессии */
+.session-block {
+    margin-bottom: 32px;
+}
+.session-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 16px;
+    border-left: 4px solid #4caf50;
+    padding-left: 12px;
+}
+
+/* Сетка достижений */
+.achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+/* Карточка достижения в сетке */
+.achievement-card-grid {
+    background: #1e1e1e;
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+    transition: transform 0.1s;
+}
+.achievement-img-grid {
+    width: 100%;
+    aspect-ratio: 1 / 1;  /* квадрат */
+    object-fit: cover;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #2c2c2c;
+}
+.player-name {
+    font-weight: 600;
+    margin: 8px 0 4px;
+    font-size: 0.9rem;
+}
+.achievement-text {
+    font-size: 0.8rem;
+    color: #ccc;
+    word-break: break-word;
+}
