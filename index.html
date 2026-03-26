@@ -19,12 +19,10 @@
     </div>
     <script>
         const STORAGE_KEY = 'dnd_achievements';
-        // ⬇️ ВСТАВЬТЕ ВАШ ID ВК (число)
-        const ADMIN_VK_ID = 123456789;
+        const ADMIN_VK_ID = 162536789;   // Ваш ID
 
         vkBridge.send('VKWebAppInit');
 
-        // Получаем информацию о текущем пользователе
         async function checkAdmin() {
             try {
                 const user = await vkBridge.send('VKWebAppGetUserInfo');
@@ -32,11 +30,10 @@
                     document.getElementById('adminButton').style.display = 'block';
                 }
             } catch (e) {
-                console.error('Ошибка получения пользователя:', e);
+                console.error(e);
             }
         }
 
-        // Загрузка достижений из Storage
         async function loadAchievements() {
             try {
                 const result = await vkBridge.send('VKWebAppStorageGet', { keys: [STORAGE_KEY] });
@@ -45,12 +42,11 @@
                 }
                 return [];
             } catch (e) {
-                console.error('Ошибка загрузки:', e);
+                console.error(e);
                 return [];
             }
         }
 
-        // Отображение ленты
         async function renderList() {
             const achievements = await loadAchievements();
             const container = document.getElementById('achievementsList');
