@@ -21,16 +21,21 @@
             <div id="message"></div>
         </div>
         <div id="manualPlayers" style="display:none; margin-top:10px;">
-            <label>Введите список игроков в формате JSON:</label>
-            <textarea id="manualList" rows="4" placeholder='[{"name":"Игрок 1","id":123456789}]'></textarea>
+            <label>Не удалось загрузить список участников. Введите игроков вручную (JSON):</label>
+            <textarea id="manualList" rows="4" placeholder='[{"name":"Имя игрока","id":123456789}]'></textarea>
             <button id="useManualBtn">Применить список</button>
         </div>
+        <div id="errorMsg" style="display:none; color:#ff8888;"></div>
     </div>
     <script>
         const SUPABASE_URL = 'https://jrwgibmbjaoogsdnukzi.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_UjoyHMlGvIvQMxKTENAUMQ_OE3GtvON';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const GROUP_ID = 236712001;
+        const APP_ID = 54508090;
         const ADMIN_VK_ID = 162536789;
+
+        let userToken = null;
 
         vkBridge.send('VKWebAppInit').then(() => {
             return vkBridge.send('VKWebAppGetUserInfo');
@@ -39,34 +44,52 @@
                 document.getElementById('loading').innerHTML = 'Доступ запрещён. Вы не администратор.';
                 return;
             }
+            // Устанавливаем сессию в Supabase для RLS
+            return supabaseClient.rpc('set_user_id', { user_id: user.id });
+        }).then(() => {
+            // Запрашиваем пользовательский токен с правом groups
+            return vkBridge.send('VKWebAppGetAuthToken', {
+                app_id: APP_ID,
+                scope: 'groups'
+            });
+        }).then(data => {
+            userToken = data.access_token;
+            return loadGroupMembers();
+        }).then(() => {
             document.getElementById('loading').style.display = 'none';
+            document.getElementById('adminContent').style.display = 'block';
+        }).catch(err => {
+            console.error('Ошибка:', err);
+            document.getElementById('loading').innerHTML = 'Не удалось загрузить список участников.';
+            document.getElementById('errorMsg').innerHTML = `Ошибка: ${err.error_type || err.message}`;
+            document.getElementById('errorMsg').style.display = 'block';
             document.getElementById('manualPlayers').style.display = 'block';
             document.getElementById('manualList').value = JSON.stringify([
                 { name: "Администратор", id: ADMIN_VK_ID }
             ], null, 2);
-        }).catch(err => {
-            console.error(err);
-            document.getElementById('loading').innerHTML = 'Ошибка инициализации. Перезагрузите страницу.';
         });
 
-        document.getElementById('useManualBtn').onclick = () => {
-            try {
-                const players = JSON.parse(document.getElementById('manualList').value);
-                if (!Array.isArray(players)) throw new Error('Не массив');
-                const select = document.getElementById('playerSelect');
-                select.innerHTML = '';
-                players.forEach(p => {
-                    const option = document.createElement('option');
-                    option.value = p.id;
-                    option.textContent = p.name;
-                    select.appendChild(option);
-                });
-                document.getElementById('manualPlayers').style.display = 'none';
-                document.getElementById('adminContent').style.display = 'block';
-            } catch (e) {
-                alert('Ошибка в JSON. Используйте формат: [{"name":"Имя","id":123}]');
-            }
-        };
+        async function loadGroupMembers() {
+            const response = await vkBridge.send('VKWebAppCallAPIMethod', {
+                method: 'groups.getMembers',
+                params: {
+                    group_id: GROUP_ID,
+                    fields: 'first_name,last_name',
+                    count: 200,
+                    access_token: userToken
+                }
+            });
+            const members = response.response.items;
+            if (!members || members.length === 0) throw new Error('Нет участников');
+            const select = document.getElementById('playerSelect');
+            select.innerHTML = '';
+            members.forEach(m => {
+                const option = document.createElement('option');
+                option.value = m.id;
+                option.textContent = `${m.first_name} ${m.last_name}`;
+                select.appendChild(option);
+            });
+        }
 
         async function uploadImage(file) {
             const fileName = `${Date.now()}_${file.name}`;
@@ -108,6 +131,26 @@
             } catch (err) {
                 console.error(err);
                 alert('Ошибка: ' + err.message);
+            }
+        };
+
+        document.getElementById('useManualBtn').onclick = () => {
+            try {
+                const players = JSON.parse(document.getElementById('manualList').value);
+                if (!Array.isArray(players)) throw new Error('Не массив');
+                const select = document.getElementById('playerSelect');
+                select.innerHTML = '';
+                players.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = p.name;
+                    select.appendChild(option);
+                });
+                document.getElementById('manualPlayers').style.display = 'none';
+                document.getElementById('errorMsg').style.display = 'none';
+                document.getElementById('adminContent').style.display = 'block';
+            } catch (e) {
+                alert('Ошибка в JSON. Используйте формат: [{"name":"Имя","id":123}]');
             }
         };
     </script>
