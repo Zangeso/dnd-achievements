@@ -27,71 +27,38 @@
         </div>
     </div>
     <script>
-        // ---------- НАСТРОЙКИ (УЖЕ ВАШИ) ----------
+        // ---------- НАСТРОЙКИ (ВАШИ) ----------
         const APP_ID = 54508090;
         const GROUP_ID = 236712001;
         const ALBUM_ID = 310403391;
         const STORAGE_KEY = 'dnd_achievements';
-        // ------------------------------------------
+        // ------------------------------------
 
-        vkBridge.send('VKWebAppInit');
-
-        // Запрашиваем токен с правами photos, storage, groups
-        vkBridge.send('VKWebAppGetAuthToken', {
-            app_id: APP_ID,
-            scope: 'photos,storage,groups'
-        }).then(async () => {
-            console.log('Токен получен');
-            // Проверяем, админ ли пользователь
-            const isAdmin = await checkIfAdmin();
-            if (isAdmin) {
-                console.log('Пользователь администратор');
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('adminContent').style.display = 'block';
-                // Пытаемся загрузить список участников
-                loadGroupMembers();
-            } else {
-                console.log('Пользователь НЕ администратор');
-                document.getElementById('loading').style.display = 'none';
-                const errorDiv = document.getElementById('errorMsg');
-                errorDiv.innerText = 'Доступ только для администраторов группы.';
-                errorDiv.style.display = 'block';
-            }
-        }).catch(err => {
-            console.error('Ошибка получения токена:', err);
-            document.getElementById('loading').innerText = 'Не удалось получить разрешения. Перезагрузите страницу и разрешите доступ.';
-        });
-
-        async function checkIfAdmin() {
-            try {
-                const user = await vkBridge.send('VKWebAppGetUserInfo');
-                console.log('Текущий пользователь:', user);
-                const response = await vkBridge.send('VKWebAppCallAPIMethod', {
-                    method: 'groups.isMember',
-                    params: {
-                        group_id: GROUP_ID,
-                        user_id: user.id,
-                        extended: 1
-                    }
-                });
-                console.log('Результат groups.isMember:', response);
-                const data = response.response;
-                // role может быть 'admin', 'editor', 'moderator', 'member' и т.д.
-                if (data.member && data.role && data.role !== 'member') {
-                    return true;
-                } else {
-                    console.warn('Пользователь не администратор, role:', data.role);
-                    return false;
-                }
-            } catch (e) {
-                console.error('Ошибка при проверке администратора:', e);
-                return false;
-            }
+        // Проверяем, что мы внутри VK
+        if (!window.vkBridge) {
+            document.getElementById('loading').innerHTML = 'Ошибка: приложение запущено вне VK. Откройте его через группу или https://vk.com/app54508090';
+        } else {
+            vkBridge.send('VKWebAppInit');
         }
 
-        async function loadGroupMembers() {
+        // Запрашиваем токен только для photos и storage (groups не обязателен)
+        vkBridge.send('VKWebAppGetAuthToken', {
+            app_id: APP_ID,
+            scope: 'photos,storage'
+        }).then(() => {
+            console.log('Токен photos+storage получен');
+            // Далее пытаемся загрузить участников, но если не получится — покажем ручной ввод
+            loadGroupMembersWithFallback();
+        }).catch(err => {
+            console.error('Ошибка получения токена:', err);
+            document.getElementById('loading').innerHTML = 'Не удалось получить разрешения. Перезагрузите страницу и разрешите доступ. Если ошибка повторяется, используйте ручной ввод игроков.';
+            // Всё равно показываем ручной ввод, чтобы можно было добавить достижение
+            showManualInputFallback();
+        });
+
+        async function loadGroupMembersWithFallback() {
             try {
-                console.log('Загружаем участников группы...');
+                // Пытаемся получить участников группы (нужен groups, но если нет прав, будет ошибка)
                 const response = await vkBridge.send('VKWebAppCallAPIMethod', {
                     method: 'groups.getMembers',
                     params: {
@@ -100,7 +67,6 @@
                         count: 200
                     }
                 });
-                console.log('Участники загружены:', response);
                 const members = response.response.items;
                 if (members && members.length) {
                     const select = document.getElementById('playerSelect');
@@ -111,24 +77,28 @@
                         option.textContent = `${m.first_name} ${m.last_name}`;
                         select.appendChild(option);
                     });
-                    // Если всё ок, скрываем ручной ввод
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('adminContent').style.display = 'block';
                     document.getElementById('manualPlayers').style.display = 'none';
-                } else {
-                    throw new Error('Список участников пуст');
+                    return;
                 }
+                throw new Error('Список участников пуст');
             } catch (e) {
-                console.error('Ошибка загрузки участников:', e);
-                // Показываем блок ручного ввода
-                document.getElementById('manualPlayers').style.display = 'block';
-                const errorDiv = document.getElementById('errorMsg');
-                errorDiv.innerText = 'Не удалось загрузить список участников. Вы можете ввести игроков вручную ниже.';
-                errorDiv.style.display = 'block';
-                // Предзаполняем примером
-                document.getElementById('manualList').value = JSON.stringify([
-                    { name: "Игрок 1", id: 123456789 },
-                    { name: "Игрок 2", id: 987654321 }
-                ], null, 2);
+                console.error('Не удалось загрузить участников:', e);
+                showManualInputFallback();
             }
+        }
+
+        function showManualInputFallback() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('manualPlayers').style.display = 'block';
+            document.getElementById('errorMsg').style.display = 'block';
+            document.getElementById('errorMsg').innerText = 'Автоматическая загрузка участников не удалась. Введите список игроков вручную (JSON). После этого форма станет доступна.';
+            // Предзаполняем примером
+            document.getElementById('manualList').value = JSON.stringify([
+                { name: "Алексей", id: 162536789 },  // ваш ID для примера
+                { name: "Другой игрок", id: 987654321 }
+            ], null, 2);
         }
 
         // Обработка ручного списка
@@ -147,17 +117,13 @@
                 });
                 document.getElementById('manualPlayers').style.display = 'none';
                 document.getElementById('errorMsg').style.display = 'none';
-                // Если до этого не показывали adminContent, показываем
-                if (document.getElementById('adminContent').style.display === 'none') {
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('adminContent').style.display = 'block';
-                }
+                document.getElementById('adminContent').style.display = 'block';
             } catch (e) {
                 alert('Ошибка в формате JSON. Используйте формат: [{"name":"Имя","id":123}]');
             }
         };
 
-        // Публикация достижения (код остаётся без изменений)
+        // Публикация достижения
         document.getElementById('submitBtn').onclick = async () => {
             const title = document.getElementById('title').value;
             const playerId = document.getElementById('playerSelect').value;
