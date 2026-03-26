@@ -10,10 +10,7 @@
 <body>
     <div id="admin-panel">
         <h2>Добавить достижение</h2>
-        <div id="loginBlock">
-            <input type="password" id="password" placeholder="Введите пароль" />
-            <button id="checkPasswordBtn">Войти</button>
-        </div>
+        <div id="loading">Загрузка списка игроков...</div>
         <div id="adminContent" style="display:none;">
             <label>Выберите игрока:</label>
             <select id="playerSelect"></select>
@@ -25,43 +22,54 @@
     </div>
     <script>
         // ---------- НАСТРОЙКИ (ЗАМЕНИТЕ НА СВОИ) ----------
-        const ALBUM_ID = 123456;           // ID альбома в группе
-        const GROUP_ID = -123456;          // ID группы (с минусом)
-        const ADMIN_PASSWORD = 'mysecret'; // Ваш пароль для входа в админку
+        const GROUP_ID = 236712001;        // положительный ID группы (без минуса)
+        const ALBUM_ID = 310403391;        // ID альбома
         const STORAGE_KEY = 'dnd_achievements';
-        // ---------------------------------------------------
-
-        // Список игроков (можете изменить прямо здесь)
-        const PLAYERS = [
-            { name: 'Алексей', id: 123456789 },
-            { name: 'Мария', id: 987654321 },
-            { name: 'Дмитрий', id: 555666777 }
-        ];
+        // -------------------------------------------------
 
         vkBridge.send('VKWebAppInit');
 
-        // Проверка пароля
-        document.getElementById('checkPasswordBtn').onclick = () => {
-            const pwd = document.getElementById('password').value;
-            if (pwd === ADMIN_PASSWORD) {
-                document.getElementById('loginBlock').style.display = 'none';
-                document.getElementById('adminContent').style.display = 'block';
-                loadPlayers();
-            } else {
-                alert('Неверный пароль');
+        // Получаем список участников группы
+        async function loadGroupMembers() {
+            try {
+                // Запрашиваем первых 200 участников (можно больше, если нужно)
+                const response = await vkBridge.send('VKWebAppCallAPIMethod', {
+                    method: 'groups.getMembers',
+                    params: {
+                        group_id: GROUP_ID,
+                        fields: 'first_name,last_name',
+                        count: 200
+                    }
+                });
+                const members = response.response.items;
+                return members.map(m => ({
+                    name: `${m.first_name} ${m.last_name}`,
+                    id: m.id
+                }));
+            } catch (e) {
+                console.error('Ошибка загрузки участников:', e);
+                alert('Не удалось загрузить список игроков. Убедитесь, что приложение имеет право "groups".');
+                return [];
             }
-        };
+        }
 
-        // Заполнить выпадающий список игроков
-        function loadPlayers() {
+        // Заполнить выпадающий список
+        async function initAdmin() {
+            const members = await loadGroupMembers();
+            if (members.length === 0) {
+                document.getElementById('loading').innerText = 'Не удалось загрузить список игроков.';
+                return;
+            }
             const select = document.getElementById('playerSelect');
             select.innerHTML = '';
-            PLAYERS.forEach(player => {
+            members.forEach(m => {
                 const option = document.createElement('option');
-                option.value = player.id;
-                option.textContent = player.name;
+                option.value = m.id;
+                option.textContent = m.name;
                 select.appendChild(option);
             });
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('adminContent').style.display = 'block';
         }
 
         // Публикация достижения
@@ -76,16 +84,15 @@
                 return;
             }
 
-            // 1. Загружаем фото в альбом группы
             try {
-                // Получаем сервер для загрузки
+                // 1. Получаем сервер для загрузки фото
                 const uploadServerRes = await vkBridge.send('VKWebAppCallAPIMethod', {
                     method: 'photos.getUploadServer',
-                    params: { group_id: -GROUP_ID, album_id: ALBUM_ID }
+                    params: { group_id: GROUP_ID, album_id: ALBUM_ID }
                 });
                 const uploadUrl = uploadServerRes.response.upload_url;
 
-                // Загружаем файл через fetch
+                // 2. Загружаем файл
                 const formData = new FormData();
                 formData.append('file', file);
                 const uploadResponse = await fetch(uploadUrl, {
@@ -94,11 +101,11 @@
                 });
                 const uploadData = await uploadResponse.json();
 
-                // Сохраняем фото в альбоме
+                // 3. Сохраняем фото в альбоме
                 const saveRes = await vkBridge.send('VKWebAppCallAPIMethod', {
                     method: 'photos.save',
                     params: {
-                        group_id: -GROUP_ID,
+                        group_id: GROUP_ID,
                         album_id: ALBUM_ID,
                         server: uploadData.server,
                         photos_list: uploadData.photos_list,
@@ -108,24 +115,23 @@
                 const photo = saveRes.response[0];
                 const photoUrl = photo.sizes[photo.sizes.length-1].url;
 
-                // 2. Получаем текущий список достижений из Storage
+                // 4. Получаем текущие достижения из Storage
                 const storageRes = await vkBridge.send('VKWebAppStorageGet', { keys: [STORAGE_KEY] });
                 let achievements = [];
                 if (storageRes.keys[0] && storageRes.keys[0].value) {
                     achievements = JSON.parse(storageRes.keys[0].value);
                 }
 
-                // 3. Добавляем новое достижение
-                const newAchievement = {
+                // 5. Добавляем новое
+                achievements.push({
                     title: title,
                     playerName: playerName,
                     playerId: parseInt(playerId),
                     photoUrl: photoUrl,
                     timestamp: Date.now()
-                };
-                achievements.push(newAchievement);
+                });
 
-                // 4. Сохраняем обратно в Storage
+                // 6. Сохраняем обратно
                 await vkBridge.send('VKWebAppStorageSet', {
                     key: STORAGE_KEY,
                     value: JSON.stringify(achievements)
@@ -139,6 +145,9 @@
                 alert('Ошибка: ' + (err.message || err));
             }
         };
+
+        // Запускаем админку
+        initAdmin();
     </script>
 </body>
 </html>
