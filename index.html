@@ -6,27 +6,35 @@
     <title>D&D Достижения</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
     <div id="app">
         <div id="header">
             <h1>🏆 Достижения</h1>
             <div id="adminButton" style="display:none;">
-    <a href="admin.html">⚙️</a>
-</div>
+                <a href="admin.html" target="_top">⚙️</a>
+            </div>
         </div>
         <div id="achievementsList"></div>
     </div>
     <script>
-        const STORAGE_KEY = 'dnd_achievements';
-        const ADMIN_VK_ID = 162536789;   // Ваш ID
+        const SUPABASE_URL = 'https://ваш_проект.supabase.co';   // замените
+        const SUPABASE_ANON_KEY = 'ваш_anon_публичный_ключ';   // замените
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const GROUP_ID = 236712001;
 
         vkBridge.send('VKWebAppInit');
 
         async function checkAdmin() {
             try {
                 const user = await vkBridge.send('VKWebAppGetUserInfo');
-                if (user.id === ADMIN_VK_ID) {
+                const response = await vkBridge.send('VKWebAppCallAPIMethod', {
+                    method: 'groups.isMember',
+                    params: { group_id: GROUP_ID, user_id: user.id, extended: 1 }
+                });
+                const data = response.response;
+                if (data.member && data.role && data.role !== 'member') {
                     document.getElementById('adminButton').style.display = 'block';
                 }
             } catch (e) {
@@ -35,34 +43,32 @@
         }
 
         async function loadAchievements() {
-            try {
-                const result = await vkBridge.send('VKWebAppStorageGet', { keys: [STORAGE_KEY] });
-                if (result.keys[0] && result.keys[0].value) {
-                    return JSON.parse(result.keys[0].value);
-                }
-                return [];
-            } catch (e) {
-                console.error(e);
+            const { data, error } = await supabase
+                .from('achievements')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (error) {
+                console.error(error);
                 return [];
             }
+            return data;
         }
 
         async function renderList() {
             const achievements = await loadAchievements();
             const container = document.getElementById('achievementsList');
             container.innerHTML = '';
-            achievements.sort((a, b) => b.timestamp - a.timestamp);
             achievements.forEach(ach => {
                 const card = document.createElement('div');
                 card.className = 'achievement-card';
                 const img = document.createElement('img');
-                img.src = ach.photoUrl;
+                img.src = ach.image_url;
                 img.className = 'achievement-img';
-                img.onclick = () => vkBridge.send('VKWebAppShowImages', { images: [ach.photoUrl] });
+                img.onclick = () => vkBridge.send('VKWebAppShowImages', { images: [ach.image_url] });
                 const title = document.createElement('h3');
                 title.textContent = ach.title;
                 const player = document.createElement('p');
-                player.innerHTML = `Игрок: <a href="https://vk.com/id${ach.playerId}" target="_blank">${ach.playerName}</a>`;
+                player.innerHTML = `Игрок: <a href="https://vk.com/id${ach.player_vk_id}" target="_blank">${ach.player_name}</a>`;
                 card.appendChild(img);
                 card.appendChild(title);
                 card.appendChild(player);
