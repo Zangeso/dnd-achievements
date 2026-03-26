@@ -1,18 +1,29 @@
+/* Основные стили */
 body {
     background: #121212;
     color: #e0e0e0;
-    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
     margin: 0;
     padding: 16px;
+    line-height: 1.4;
 }
+
+/* Контейнеры */
 #app, #admin-panel {
     max-width: 600px;
     margin: 0 auto;
 }
+
+/* Шапка с шестерёнкой */
 #header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 16px;
+}
+#header h1 {
+    font-size: 1.8rem;
+    margin: 0;
 }
 #adminButton a {
     font-size: 24px;
@@ -22,44 +33,195 @@ body {
     padding: 8px 12px;
     border-radius: 20px;
     display: inline-block;
+    transition: background 0.2s;
 }
+#adminButton a:hover {
+    background: #3c3c3c;
+}
+
+/* Карточка достижения */
 .achievement-card {
     background: #1e1e1e;
-    border-radius: 12px;
+    border-radius: 16px;
     padding: 16px;
-    margin-bottom: 16px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: transform 0.1s;
 }
+
+/* Изображение достижения — единое соотношение сторон (16:9) */
 .achievement-img {
     width: 100%;
-    max-height: 300px;
+    aspect-ratio: 16 / 9;
     object-fit: cover;
-    border-radius: 8px;
+    border-radius: 12px;
     cursor: pointer;
+    background: #2c2c2c;
+    transition: opacity 0.2s;
 }
-input, select, button {
+.achievement-img:hover {
+    opacity: 0.95;
+}
+
+/* Заголовок достижения */
+.achievement-card h3 {
+    margin: 12px 0 8px 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+/* Информация об игроке */
+.player-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    font-size: 0.95rem;
+}
+.player-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #3c3c3c;
+}
+.player-info a {
+    color: #4caf50;
+    text-decoration: none;
+    font-weight: 500;
+}
+.player-info a:hover {
+    text-decoration: underline;
+}
+
+/* Формы в админке */
+input, select, button, textarea {
     width: 100%;
     margin: 8px 0;
-    padding: 10px;
+    padding: 12px;
     box-sizing: border-box;
     background: #2c2c2c;
     border: 1px solid #3c3c3c;
     color: #e0e0e0;
-    border-radius: 8px;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-family: inherit;
+    transition: border 0.2s;
+}
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #4caf50;
 }
 button {
     background: #4caf50;
     color: white;
     border: none;
     cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
 }
 button:hover {
     background: #45a049;
 }
+button:active {
+    transform: scale(0.98);
+}
+textarea {
+    resize: vertical;
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+
+/* Блоки загрузки и ошибок */
 #loading, #errorMsg {
     text-align: center;
     margin: 20px;
+    padding: 16px;
+    background: #1e1e1e;
+    border-radius: 12px;
 }
+#errorMsg {
+    color: #ff8888;
+    border-left: 4px solid #ff4444;
+}
+#message {
+    text-align: center;
+    margin-top: 12px;
+    padding: 8px;
+    background: #2c2c2c;
+    border-radius: 8px;
+    color: #4caf50;
+}
+
+/* Ручной ввод JSON */
+#manualPlayers {
+    background: #1a1a1a;
+    padding: 16px;
+    border-radius: 16px;
+    margin-top: 16px;
+}
+#manualPlayers label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+#manualList {
+    font-family: monospace;
+    font-size: 0.85rem;
+    background: #0a0a0a;
+}
+
+/* Стили для ссылок в ленте */
 a {
     color: #4caf50;
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+}
+
+/* Адаптивность для маленьких экранов */
+@media (max-width: 480px) {
+    body {
+        padding: 12px;
+    }
+    #app, #admin-panel {
+        max-width: 100%;
+    }
+    .achievement-card {
+        padding: 12px;
+    }
+    .achievement-img {
+        border-radius: 10px;
+    }
+    .player-avatar {
+        width: 32px;
+        height: 32px;
+    }
+    #header h1 {
+        font-size: 1.5rem;
+    }
+    #adminButton a {
+        font-size: 20px;
+        padding: 6px 10px;
+    }
+    input, select, button, textarea {
+        padding: 10px;
+    }
+}
+
+/* Лёгкая анимация появления карточек */
+.achievement-card {
+    animation: fadeInUp 0.3s ease-out;
+}
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
