@@ -10,7 +10,7 @@ body {
 
 /* Контейнеры */
 #app, #admin-panel {
-    max-width: 600px;
+    max-width: 800px;
     margin: 0 auto;
 }
 
@@ -39,75 +39,104 @@ body {
     background: #3c3c3c;
 }
 
-/* Карточка достижения */
-.achievement-card {
+/* ========== ЛЕНТА (сессии) ========== */
+.session-block {
+    margin-bottom: 32px;
+    background: #1e1e1e;
+    border-radius: 24px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.session-header h2 {
+    margin: 0 0 8px 0;
+    font-size: 1.4rem;
+    color: #fff;
+}
+.session-title {
+    color: #aaa;
+    margin: 0 0 12px 0;
+    font-size: 0.9rem;
+}
+
+/* Сетка достижений */
+.achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+}
+
+/* Карточка достижения (в сетке) */
+.achievements-grid .achievement-card {
+    background: #2c2c2c;
+    border-radius: 16px;
+    padding: 12px;
+    text-align: center;
+    transition: transform 0.1s;
+}
+.achievements-grid .achievement-img {
+    width: 100%;
+    aspect-ratio: 1 / 1; /* квадрат, можно изменить на 16/9 */
+    object-fit: cover;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+.player-name {
+    font-weight: bold;
+    margin: 8px 0 4px;
+    font-size: 0.9rem;
+}
+.player-name a {
+    color: #4caf50;
+    text-decoration: none;
+}
+.achievement-text {
+    font-size: 0.8rem;
+    color: #ccc;
+    line-height: 1.3;
+}
+
+/* Адаптивность сетки */
+@media (max-width: 600px) {
+    .achievements-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 12px;
+    }
+    .session-block {
+        padding: 12px;
+    }
+}
+
+/* ========== АДМИНКА ========== */
+.admin-section {
+    margin-bottom: 24px;
     background: #1e1e1e;
     border-radius: 16px;
     padding: 16px;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    transition: transform 0.1s;
 }
-
-/* Изображение достижения — единое соотношение сторон (16:9) */
-.achievement-img {
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    object-fit: cover;
-    border-radius: 12px;
-    cursor: pointer;
-    background: #2c2c2c;
-    transition: opacity 0.2s;
-}
-.achievement-img:hover {
-    opacity: 0.95;
-}
-
-/* Заголовок достижения */
-.achievement-card h3 {
-    margin: 12px 0 8px 0;
+.admin-section h3 {
+    margin-top: 0;
     font-size: 1.2rem;
-    font-weight: 600;
     color: #fff;
 }
-
-/* Информация об игроке */
-.player-info {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 8px;
-    font-size: 0.95rem;
+.form-row {
+    margin-bottom: 12px;
 }
-.player-avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 1px solid #3c3c3c;
-}
-.player-info a {
-    color: #4caf50;
-    text-decoration: none;
+.form-row label {
+    display: block;
+    margin-bottom: 4px;
     font-weight: 500;
 }
-.player-info a:hover {
-    text-decoration: underline;
-}
-
-/* Формы в админке */
 input, select, button, textarea {
     width: 100%;
-    margin: 8px 0;
-    padding: 12px;
+    padding: 10px;
     box-sizing: border-box;
     background: #2c2c2c;
     border: 1px solid #3c3c3c;
     color: #e0e0e0;
-    border-radius: 10px;
+    border-radius: 8px;
     font-size: 1rem;
     font-family: inherit;
-    transition: border 0.2s;
 }
 input:focus, select:focus, textarea:focus {
     outline: none;
@@ -127,147 +156,88 @@ button:hover {
 button:active {
     transform: scale(0.98);
 }
-textarea {
-    resize: vertical;
-    font-family: monospace;
-    font-size: 0.9rem;
+button.secondary {
+    background: #3c3c3c;
 }
-
-/* Блоки загрузки и ошибок */
-#loading, #errorMsg {
+button.secondary:hover {
+    background: #4c4c4c;
+}
+.achievement-block {
+    background: #2c2c2c;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+    position: relative;
+}
+.achievement-block .remove-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #ff4444;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.achievement-block .remove-btn:hover {
+    background: #ff6666;
+}
+.preview-img {
+    max-width: 100px;
+    max-height: 100px;
+    margin-top: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+#loading, #errorMsg, #message {
     text-align: center;
     margin: 20px;
-    padding: 16px;
-    background: #1e1e1e;
+    padding: 12px;
     border-radius: 12px;
 }
 #errorMsg {
     color: #ff8888;
-    border-left: 4px solid #ff4444;
+    background: #2c2c2c;
 }
 #message {
-    text-align: center;
-    margin-top: 12px;
-    padding: 8px;
     background: #2c2c2c;
-    border-radius: 8px;
     color: #4caf50;
 }
-
-/* Ручной ввод JSON */
-#manualPlayers {
-    background: #1a1a1a;
-    padding: 16px;
-    border-radius: 16px;
-    margin-top: 16px;
-}
-#manualPlayers label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 500;
-}
-#manualList {
-    font-family: monospace;
-    font-size: 0.85rem;
-    background: #0a0a0a;
-}
-
-/* Стили для ссылок в ленте */
-a {
-    color: #4caf50;
-    text-decoration: none;
-}
-a:hover {
-    text-decoration: underline;
-}
-
-/* Адаптивность для маленьких экранов */
-@media (max-width: 480px) {
-    body {
-        padding: 12px;
-    }
-    #app, #admin-panel {
-        max-width: 100%;
-    }
-    .achievement-card {
-        padding: 12px;
-    }
-    .achievement-img {
-        border-radius: 10px;
-    }
-    .player-avatar {
-        width: 32px;
-        height: 32px;
-    }
-    #header h1 {
-        font-size: 1.5rem;
-    }
-    #adminButton a {
-        font-size: 20px;
-        padding: 6px 10px;
-    }
-    input, select, button, textarea {
-        padding: 10px;
-    }
-}
-
-/* Лёгкая анимация появления карточек */
-.achievement-card {
-    animation: fadeInUp 0.3s ease-out;
-}
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Блок сессии */
-.session-block {
-    margin-bottom: 32px;
-}
-.session-title {
-    font-size: 1.5rem;
-    font-weight: bold;
-    margin-bottom: 16px;
-    border-left: 4px solid #4caf50;
-    padding-left: 12px;
-}
-
-/* Сетка достижений */
-.achievements-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 20px;
-}
-
-/* Карточка достижения в сетке */
-.achievement-card-grid {
-    background: #1e1e1e;
-    border-radius: 12px;
-    padding: 12px;
-    text-align: center;
-    transition: transform 0.1s;
-}
-.achievement-img-grid {
+/* Модальное окно для кропа */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
     width: 100%;
-    aspect-ratio: 1 / 1;  /* квадрат */
-    object-fit: cover;
-    border-radius: 8px;
-    cursor: pointer;
-    background: #2c2c2c;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
 }
-.player-name {
-    font-weight: 600;
-    margin: 8px 0 4px;
-    font-size: 0.9rem;
+.modal-content {
+    background: #1e1e1e;
+    border-radius: 16px;
+    max-width: 90%;
+    max-height: 90%;
+    overflow: auto;
+    padding: 16px;
+    position: relative;
 }
-.achievement-text {
-    font-size: 0.8rem;
-    color: #ccc;
-    word-break: break-word;
+.modal-content img {
+    max-width: 100%;
+    display: block;
+}
+.modal-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+    justify-content: center;
 }
