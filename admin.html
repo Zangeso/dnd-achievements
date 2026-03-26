@@ -22,7 +22,7 @@
         </div>
         <div id="manualPlayers" style="display:none; margin-top:10px;">
             <label>Введите список игроков в формате JSON:</label>
-            <textarea id="manualList" rows="4" placeholder='[{"name":"Игрок 1","id":123456789}]'></textarea>
+            <textarea id="manualList" rows="4" placeholder='[{"name":"Имя","id":123456789}]'></textarea>
             <button id="useManualBtn">Применить список</button>
         </div>
     </div>
@@ -69,7 +69,16 @@
         };
 
         async function uploadImage(file) {
-            const fileName = `${Date.now()}_${file.name}`;
+            // Нормализуем имя файла: убираем кириллицу и спецсимволы
+            const originalName = file.name;
+            const ext = originalName.split('.').pop();
+            const safeName = originalName
+                .replace(/[^a-zA-Z0-9.]/g, '_')
+                .replace(/_{2,}/g, '_')
+                .replace(/^_|_$/g, '');
+            const fileName = `${Date.now()}_${safeName}`;
+            
+            console.log('Загружаем файл:', fileName);
             const { data, error } = await supabaseClient.storage
                 .from('achievements')
                 .upload(fileName, file);
