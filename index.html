@@ -19,10 +19,12 @@
         <div id="achievementsList"></div>
     </div>
     <script>
-        const SUPABASE_URL = 'https://ваш_проект.supabase.co';   // замените
-        const SUPABASE_ANON_KEY = 'ваш_anon_публичный_ключ';   // замените
+        // ---------- ВСТАВЬТЕ СВОИ ДАННЫЕ ----------
+        const SUPABASE_URL = 'https://jrwgibmbjaoogsdnukzi.supabase.co';   // замените
+        const SUPABASE_ANON_KEY = 'sb_publishable_UjoyHMlGvIvQMxKTENAUMQ_OE3GtvON';    // замените
+        // -----------------------------------------
         const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        const GROUP_ID = 236712001;
+        const GROUP_ID = 236712001;   // ID вашей группы (положительный)
 
         vkBridge.send('VKWebAppInit');
 
