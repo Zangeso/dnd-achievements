@@ -23,18 +23,14 @@
         const SUPABASE_ANON_KEY = 'sb_publishable_UjoyHMlGvIvQMxKTENAUMQ_OE3GtvON';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const GROUP_ID = 236712001;
+        const ADMIN_VK_ID = 162536789;   // ваш VK ID
 
         vkBridge.send('VKWebAppInit');
 
         async function checkAdmin() {
             try {
                 const user = await vkBridge.send('VKWebAppGetUserInfo');
-                const response = await vkBridge.send('VKWebAppCallAPIMethod', {
-                    method: 'groups.isMember',
-                    params: { group_id: GROUP_ID, user_id: user.id, extended: 1 }
-                });
-                const data = response.response;
-                if (data.member && data.role && data.role !== 'member') {
+                if (user.id === ADMIN_VK_ID) {
                     document.getElementById('adminButton').style.display = 'block';
                 }
             } catch (e) {
