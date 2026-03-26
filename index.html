@@ -9,17 +9,34 @@
 </head>
 <body>
     <div id="app">
-        <h1>🏆 Достижения</h1>
+        <div id="header">
+            <h1>🏆 Достижения</h1>
+            <div id="adminButton" style="display:none;">
+                <a href="admin.html" target="_top">⚙️</a>
+            </div>
+        </div>
         <div id="achievementsList"></div>
     </div>
     <script>
-        // Ключ для хранения достижений в VK Storage
         const STORAGE_KEY = 'dnd_achievements';
+        // ⬇️ ВСТАВЬТЕ ВАШ ID ВК (число)
+        const ADMIN_VK_ID = 123456789;
 
-        // Инициализация VK Bridge
         vkBridge.send('VKWebAppInit');
 
-        // Загрузка достижений
+        // Получаем информацию о текущем пользователе
+        async function checkAdmin() {
+            try {
+                const user = await vkBridge.send('VKWebAppGetUserInfo');
+                if (user.id === ADMIN_VK_ID) {
+                    document.getElementById('adminButton').style.display = 'block';
+                }
+            } catch (e) {
+                console.error('Ошибка получения пользователя:', e);
+            }
+        }
+
+        // Загрузка достижений из Storage
         async function loadAchievements() {
             try {
                 const result = await vkBridge.send('VKWebAppStorageGet', { keys: [STORAGE_KEY] });
@@ -38,20 +55,16 @@
             const achievements = await loadAchievements();
             const container = document.getElementById('achievementsList');
             container.innerHTML = '';
-            // Сортируем по времени (новые сверху)
             achievements.sort((a, b) => b.timestamp - a.timestamp);
             achievements.forEach(ach => {
                 const card = document.createElement('div');
                 card.className = 'achievement-card';
-                // Картинка
                 const img = document.createElement('img');
                 img.src = ach.photoUrl;
                 img.className = 'achievement-img';
                 img.onclick = () => vkBridge.send('VKWebAppShowImages', { images: [ach.photoUrl] });
-                // Название
                 const title = document.createElement('h3');
                 title.textContent = ach.title;
-                // Игрок
                 const player = document.createElement('p');
                 player.innerHTML = `Игрок: <a href="https://vk.com/id${ach.playerId}" target="_blank">${ach.playerName}</a>`;
                 card.appendChild(img);
@@ -61,6 +74,7 @@
             });
         }
 
+        checkAdmin();
         renderList();
     </script>
 </body>
