@@ -38,36 +38,41 @@
         let userToken = null;
         let currentUserId = null;
 
+        console.log('=== Админка запущена ===');
+
         vkBridge.send('VKWebAppInit').then(() => {
+            console.log('VKWebAppInit успешно');
             return vkBridge.send('VKWebAppGetUserInfo');
         }).then(user => {
+            console.log('Пользователь:', user);
             currentUserId = user.id;
             if (currentUserId !== ADMIN_VK_ID) {
                 document.getElementById('loading').innerHTML = 'Доступ запрещён. Вы не администратор.';
+                console.error('Пользователь не администратор');
                 return;
             }
-            // Устанавливаем сессию в Supabase (для RLS)
+            console.log('Устанавливаем сессию в Supabase');
             return supabaseClient.rpc('set_user_id', { user_id: currentUserId });
         }).then(() => {
-            // Запрашиваем пользовательский токен с правами groups
+            console.log('Сессия установлена, запрашиваем токен...');
             return vkBridge.send('VKWebAppGetAuthToken', {
                 app_id: APP_ID,
                 scope: 'groups'
             });
         }).then(data => {
             userToken = data.access_token;
-            console.log('Пользовательский токен получен');
+            console.log('Токен получен, длина:', userToken.length);
             return loadGroupMembers();
         }).then(() => {
+            console.log('Участники загружены');
             document.getElementById('loading').style.display = 'none';
             document.getElementById('adminContent').style.display = 'block';
         }).catch(err => {
-            console.error('Ошибка получения токена или загрузки участников:', err);
+            console.error('Ошибка:', err);
             document.getElementById('loading').innerHTML = 'Не удалось загрузить список участников.';
             document.getElementById('errorMsg').innerHTML = `Ошибка: ${err.error_type || err.message}<br>Данные: ${JSON.stringify(err.error_data)}`;
             document.getElementById('errorMsg').style.display = 'block';
             document.getElementById('manualPlayers').style.display = 'block';
-            // Предзаполняем примером
             document.getElementById('manualList').value = JSON.stringify([
                 { name: "Администратор", id: ADMIN_VK_ID },
                 { name: "Игрок 1", id: 123456789 }
@@ -75,6 +80,7 @@
         });
 
         async function loadGroupMembers() {
+            console.log('Загружаем участников группы', GROUP_ID);
             const response = await vkBridge.send('VKWebAppCallAPIMethod', {
                 method: 'groups.getMembers',
                 params: {
@@ -84,6 +90,7 @@
                     access_token: userToken
                 }
             });
+            console.log('Ответ groups.getMembers:', response);
             const members = response.response.items;
             if (!members || members.length === 0) throw new Error('Нет участников');
             const select = document.getElementById('playerSelect');
