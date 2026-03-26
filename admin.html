@@ -11,7 +11,7 @@
 <body>
     <div id="admin-panel">
         <h2>Добавить достижение</h2>
-        <div id="loading">Проверка прав...</div>
+        <div id="loading">Инициализация...</div>
         <div id="adminContent" style="display:none;">
             <label>Выберите игрока:</label>
             <select id="playerSelect"></select>
@@ -20,40 +20,41 @@
             <button id="submitBtn">Опубликовать</button>
             <div id="message"></div>
         </div>
+        <div id="errorMsg" style="display:none; color:#ff8888;"></div>
         <div id="manualPlayers" style="display:none; margin-top:10px;">
             <label>Не удалось загрузить список участников. Введите игроков вручную (JSON):</label>
-            <textarea id="manualList" rows="4" placeholder='[{"name":"Имя игрока","id":123456789}]'></textarea>
+            <textarea id="manualList" rows="4" placeholder='[{"name":"Игрок 1","id":123456789},{"name":"Игрок 2","id":987654321}]'></textarea>
             <button id="useManualBtn">Применить список</button>
         </div>
-        <div id="errorMsg" style="display:none; color:#ff8888;"></div>
     </div>
     <script>
         const SUPABASE_URL = 'https://jrwgibmbjaoogsdnukzi.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_UjoyHMlGvIvQMxKTENAUMQ_OE3GtvON';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const GROUP_ID = 236712001;
-        const APP_ID = 54509223;
+        const APP_ID = 54509223;   // ← обновите на новый ID приложения
         const ADMIN_VK_ID = 162536789;
 
         let userToken = null;
+        let currentUserId = null;
 
         vkBridge.send('VKWebAppInit').then(() => {
             return vkBridge.send('VKWebAppGetUserInfo');
         }).then(user => {
-            if (user.id !== ADMIN_VK_ID) {
+            currentUserId = user.id;
+            if (currentUserId !== ADMIN_VK_ID) {
                 document.getElementById('loading').innerHTML = 'Доступ запрещён. Вы не администратор.';
                 return;
             }
-            // Устанавливаем сессию в Supabase для RLS
-            return supabaseClient.rpc('set_user_id', { user_id: user.id });
+            return supabaseClient.rpc('set_user_id', { user_id: currentUserId });
         }).then(() => {
-            // Запрашиваем пользовательский токен с правом groups
             return vkBridge.send('VKWebAppGetAuthToken', {
                 app_id: APP_ID,
                 scope: 'groups'
             });
         }).then(data => {
             userToken = data.access_token;
+            console.log('Токен получен');
             return loadGroupMembers();
         }).then(() => {
             document.getElementById('loading').style.display = 'none';
@@ -61,7 +62,7 @@
         }).catch(err => {
             console.error('Ошибка:', err);
             document.getElementById('loading').innerHTML = 'Не удалось загрузить список участников.';
-            document.getElementById('errorMsg').innerHTML = `Ошибка: ${err.error_type || err.message}`;
+            document.getElementById('errorMsg').innerHTML = `Ошибка: ${err.error_type || err.message}<br>Данные: ${JSON.stringify(err.error_data)}`;
             document.getElementById('errorMsg').style.display = 'block';
             document.getElementById('manualPlayers').style.display = 'block';
             document.getElementById('manualList').value = JSON.stringify([
@@ -76,7 +77,8 @@
                     group_id: GROUP_ID,
                     fields: 'first_name,last_name',
                     count: 200,
-                    access_token: userToken
+                    access_token: userToken,
+                    v: '5.199'   // ← добавлена версия API
                 }
             });
             const members = response.response.items;
