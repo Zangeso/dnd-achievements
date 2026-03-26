@@ -34,9 +34,15 @@
                 </div>
             </div>
 
+            <!-- Область тегов добавленных достижений -->
+            <div class="admin-section">
+                <h3>Добавленные достижения</h3>
+                <div id="tagsContainer" class="tags-container"></div>
+            </div>
+
             <!-- Блоки достижений -->
             <div class="admin-section">
-                <h3>Достижения (максимум 8)</h3>
+                <h3>Редактирование достижений</h3>
                 <div id="achievementsContainer"></div>
                 <button id="addAchievementBtn" class="secondary">+ Добавить достижение</button>
             </div>
@@ -69,7 +75,7 @@
         let userToken = null;
         let currentUserId = null;
         let membersList = [];
-        let achievementsBlocks = []; // { playerId, playerName, playerAvatar, text, imageFile, imageUrl, cropper, originalFile }
+        let achievementsBlocks = []; // { playerId, playerName, playerAvatar, text, imageFile, imageUrl }
 
         let cropper = null;
         let currentFile = null;
@@ -123,6 +129,35 @@
             }));
         }
 
+        function updateTags() {
+            const container = document.getElementById('tagsContainer');
+            container.innerHTML = '';
+            achievementsBlocks.forEach((block, idx) => {
+                if (!block.playerName) return;
+                const tag = document.createElement('div');
+                tag.className = 'tag ' + (block.playerId && block.text && block.imageUrl ? 'complete' : 'incomplete');
+                tag.innerHTML = `
+                    <span>${escapeHtml(block.playerName)}</span>
+                    <button class="tag-remove" data-index="${idx}">✕</button>
+                `;
+                tag.querySelector('.tag-remove').addEventListener('click', () => removeAchievementBlock(idx));
+                container.appendChild(tag);
+            });
+            if (container.children.length === 0) {
+                container.innerHTML = '<div style="color: #aaa;">Нет добавленных достижений</div>';
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
         function addAchievementBlock() {
             if (achievementsBlocks.length >= 8) {
                 alert('Максимум 8 достижений на сессию');
@@ -163,10 +198,12 @@
                 updateBlockData(index, 'playerName', selected.text);
                 updateBlockData(index, 'playerAvatar', selected.getAttribute('data-avatar') || '');
                 checkBlockCompletion(index);
+                updateTags();
             });
             block.querySelector('.achievement-text').addEventListener('input', (e) => {
                 updateBlockData(index, 'text', e.target.value);
                 checkBlockCompletion(index);
+                updateTags();
             });
             block.querySelector('.image-file').addEventListener('change', (e) => {
                 handleImageSelect(index, e.target.files[0]);
@@ -181,6 +218,7 @@
                 imageUrl: null
             });
             checkBlockCompletion(index);
+            updateTags();
         }
 
         function removeAchievementBlock(index) {
@@ -197,11 +235,11 @@
             const blocks = container.querySelectorAll('.achievement-block');
             blocks.forEach((block, newIndex) => {
                 block.setAttribute('data-index', newIndex);
-                // обновляем атрибуты data-index у вложенных элементов
                 block.querySelectorAll('[data-index]').forEach(el => {
                     el.setAttribute('data-index', newIndex);
                 });
             });
+            updateTags();
         }
 
         function updateBlockData(index, field, value) {
@@ -247,7 +285,7 @@
                 modal.style.display = 'flex';
                 if (cropper) cropper.destroy();
                 cropper = new Cropper(img, {
-                    aspectRatio: 1 / 1, // квадрат, можно изменить на 16/9
+                    aspectRatio: 1 / 1,
                     viewMode: 1,
                     autoCropArea: 1,
                     background: false
@@ -271,6 +309,7 @@
                     previewDiv.innerHTML = `<img src="${imageUrl}" class="preview-img">`;
                 }
                 checkBlockCompletion(currentBlockIndex);
+                updateTags();
             }
             document.getElementById('cropModal').style.display = 'none';
             if (cropper) cropper.destroy();
@@ -314,17 +353,15 @@
                 alert('Укажите дату сессии');
                 return;
             }
-            // Проверяем, что все блоки заполнены
             for (let i = 0; i < achievementsBlocks.length; i++) {
                 const block = achievementsBlocks[i];
                 if (!block.playerId || !block.text || !block.imageUrl) {
-                    alert(`Заполните все поля для достижения ${i+1}`);
+                    alert(`Заполните все поля для достижения ${i+1} (${block.playerName || 'игрок не выбран'})`);
                     return;
                 }
             }
 
             try {
-                // 1. Создаём сессию
                 const { data: session, error: sessionError } = await supabaseClient
                     .from('sessions')
                     .insert([{
@@ -335,7 +372,6 @@
                     .single();
                 if (sessionError) throw sessionError;
 
-                // 2. Вставляем достижения
                 const achievementsToInsert = achievementsBlocks.map((block, idx) => ({
                     session_id: session.id,
                     player_name: block.playerName,
@@ -351,12 +387,12 @@
                 if (achError) throw achError;
 
                 document.getElementById('message').innerText = '✅ Сессия опубликована!';
-                // Очистить форму
                 document.getElementById('sessionDate').value = '';
                 document.getElementById('sessionTitle').value = '';
                 document.getElementById('achievementsContainer').innerHTML = '';
                 achievementsBlocks = [];
                 addAchievementBlock();
+                updateTags();
             } catch (err) {
                 console.error(err);
                 alert('Ошибка: ' + err.message);
