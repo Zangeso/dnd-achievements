@@ -241,3 +241,23 @@ button.secondary:hover {
     margin-top: 12px;
     justify-content: center;
 }
+#backToMain {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    background: #2c2c2c;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 12px;
+    color: #e0e0e0;
+    cursor: pointer;
+    z-index: 100;
+    font-size: 14px;
+}
+#backToMain:hover {
+    background: #3c3c3c;
+}
+#blocksCounter {
+    font-size: 0.9rem;
+    color: #4caf50;
+}
