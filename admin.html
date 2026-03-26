@@ -12,6 +12,7 @@
 </head>
 <body>
     <div id="admin-panel">
+        <button id="backToMain">← Вернуться к достижениям</button>
         <h2>Добавить сессию с достижениями</h2>
         <div id="loading">Инициализация...</div>
         <div id="adminContent" style="display:none;">
@@ -30,7 +31,10 @@
 
             <!-- Блоки достижений -->
             <div class="admin-section">
-                <h3>Достижения (максимум 8)</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin:0">Достижения</h3>
+                    <div id="blocksCounter">0 / 8</div>
+                </div>
                 <div id="achievementsContainer"></div>
                 <button id="addAchievementBtn" class="secondary">+ Добавить достижение</button>
             </div>
@@ -63,8 +67,13 @@
         let userToken = null;
         let currentUserId = null;
         let membersList = []; // список участников {id, name, avatar}
-        let achievementsBlocks = []; // храним данные каждого блока: { playerId, playerName, playerAvatar, text, imageFile, imageUrl, cropper, originalFile }
-        let currentCropBlockIndex = null; // индекс блока, для которого сейчас кроп
+        let achievementsBlocks = []; // храним данные каждого блока: { playerId, playerName, playerAvatar, text, imageUrl }
+        let nextBlockId = 0; // уникальный идентификатор для DOM
+
+        // Cropper vars
+        let cropper = null;
+        let currentFile = null;
+        let currentBlockId = null;
 
         vkBridge.send('VKWebAppInit').then(() => {
             return vkBridge.send('VKWebAppGetUserInfo');
@@ -89,6 +98,7 @@
             document.getElementById('adminContent').style.display = 'block';
             // Инициализируем один блок достижения по умолчанию
             addAchievementBlock();
+            updateCounter();
         }).catch(err => {
             console.error('Ошибка:', err);
             document.getElementById('loading').innerHTML = 'Не удалось загрузить участников.';
@@ -120,87 +130,119 @@
                 alert('Максимум 8 достижений на сессию');
                 return;
             }
-            const index = achievementsBlocks.length;
-            const container = document.getElementById('achievementsContainer');
-            const block = document.createElement('div');
-            block.className = 'achievement-block';
-            block.setAttribute('data-index', index);
-            block.innerHTML = `
-                <button class="remove-btn" data-index="${index}">×</button>
-                <div class="form-row">
-                    <label>Игрок:</label>
-                    <select class="player-select" data-index="${index}">
-                        <option value="">-- Выберите игрока --</option>
-                        ${membersList.map(m => `<option value="${m.id}" data-avatar="${m.avatar}">${m.name}</option>`).join('')}
-                    </select>
-                </div>
-                <div class="form-row">
-                    <label>Текст достижения:</label>
-                    <input type="text" class="achievement-text" data-index="${index}" placeholder="Например: Убил дракона">
-                </div>
-                <div class="form-row">
-                    <label>Картинка:</label>
-                    <input type="file" class="image-file" data-index="${index}" accept="image/*">
-                    <div class="image-preview" data-index="${index}"></div>
-                </div>
-            `;
-            container.appendChild(block);
-
-            // Добавляем обработчики
-            block.querySelector('.remove-btn').addEventListener('click', () => removeAchievementBlock(index));
-            block.querySelector('.player-select').addEventListener('change', (e) => updateBlockData(index, 'playerId', e.target.value));
-            block.querySelector('.player-select').addEventListener('change', (e) => {
-                const selected = e.target.options[e.target.selectedIndex];
-                updateBlockData(index, 'playerName', selected.text);
-                updateBlockData(index, 'playerAvatar', selected.getAttribute('data-avatar') || '');
-            });
-            block.querySelector('.achievement-text').addEventListener('input', (e) => updateBlockData(index, 'text', e.target.value));
-            block.querySelector('.image-file').addEventListener('change', (e) => handleImageSelect(index, e.target.files[0]));
-
-            achievementsBlocks.push({
+            const blockId = nextBlockId++;
+            const newBlock = {
+                id: blockId,
                 playerId: '',
                 playerName: '',
                 playerAvatar: '',
                 text: '',
-                imageFile: null,
                 imageUrl: null
-            });
+            };
+            achievementsBlocks.push(newBlock);
+            renderAchievementBlock(blockId);
+            updateCounter();
         }
 
-        function removeAchievementBlock(index) {
+        function removeAchievementBlock(blockId) {
             if (achievementsBlocks.length <= 1) {
                 alert('Должно быть хотя бы одно достижение');
                 return;
             }
-            achievementsBlocks.splice(index, 1);
-            // Перестроить блоки заново
+            const index = achievementsBlocks.findIndex(b => b.id === blockId);
+            if (index !== -1) {
+                achievementsBlocks.splice(index, 1);
+                renderAllBlocks();
+                updateCounter();
+            }
+        }
+
+        function updateBlockData(blockId, field, value) {
+            const block = achievementsBlocks.find(b => b.id === blockId);
+            if (block) {
+                block[field] = value;
+            }
+        }
+
+        function renderAllBlocks() {
             const container = document.getElementById('achievementsContainer');
             container.innerHTML = '';
-            achievementsBlocks = [];
-            for (let i = 0; i < achievementsBlocks.length; i++) {
-                addAchievementBlock();
-                // Восстановить данные (упрощённо: перезаполнить)
-            }
-            // Более простой способ: пересоздать все блоки заново с сохранёнными данными
-            // Для простоты перезагрузим все блоки (но данные потеряются). В реальном проекте лучше сохранять.
-            // Временно перезагрузим:
-            location.reload(); // не очень красиво, но для демо сойдёт. Лучше перестроить без перезагрузки.
-            // Я реализую полное перестроение ниже.
+            achievementsBlocks.forEach(block => {
+                renderAchievementBlock(block.id);
+            });
         }
 
-        function updateBlockData(index, field, value) {
-            if (achievementsBlocks[index]) {
-                achievementsBlocks[index][field] = value;
+        function renderAchievementBlock(blockId) {
+            const block = achievementsBlocks.find(b => b.id === blockId);
+            if (!block) return;
+            const container = document.getElementById('achievementsContainer');
+            const existing = document.getElementById(`block-${blockId}`);
+            if (existing) {
+                // Обновляем существующий блок (пересоздадим проще)
+                existing.remove();
             }
+            const div = document.createElement('div');
+            div.id = `block-${blockId}`;
+            div.className = 'achievement-block';
+            div.innerHTML = `
+                <button class="remove-btn" data-id="${blockId}">×</button>
+                <div class="form-row">
+                    <label>Игрок:</label>
+                    <select class="player-select" data-id="${blockId}">
+                        <option value="">-- Выберите игрока --</option>
+                        ${membersList.map(m => `<option value="${m.id}" data-avatar="${m.avatar}" ${block.playerId == m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Текст достижения:</label>
+                    <input type="text" class="achievement-text" data-id="${blockId}" value="${escapeHtml(block.text)}" placeholder="Например: Убил дракона">
+                </div>
+                <div class="form-row">
+                    <label>Картинка:</label>
+                    <input type="file" class="image-file" data-id="${blockId}" accept="image/*">
+                    <div class="image-preview" data-id="${blockId}">
+                        ${block.imageUrl ? `<img src="${block.imageUrl}" class="preview-img">` : ''}
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+
+            // Обработчики
+            div.querySelector('.remove-btn').addEventListener('click', () => removeAchievementBlock(blockId));
+            const playerSelect = div.querySelector('.player-select');
+            playerSelect.addEventListener('change', (e) => {
+                const selected = e.target.options[e.target.selectedIndex];
+                updateBlockData(blockId, 'playerId', e.target.value);
+                updateBlockData(blockId, 'playerName', selected.text);
+                updateBlockData(blockId, 'playerAvatar', selected.getAttribute('data-avatar') || '');
+            });
+            const textInput = div.querySelector('.achievement-text');
+            textInput.addEventListener('input', (e) => updateBlockData(blockId, 'text', e.target.value));
+            const fileInput = div.querySelector('.image-file');
+            fileInput.addEventListener('change', (e) => handleImageSelect(blockId, e.target.files[0]));
         }
 
-        let cropper = null;
-        let currentFile = null;
-        let currentBlockIndex = null;
+        function updateCounter() {
+            const count = achievementsBlocks.length;
+            document.getElementById('blocksCounter').innerText = `${count} / 8`;
+            const addBtn = document.getElementById('addAchievementBtn');
+            if (addBtn) addBtn.disabled = (count >= 8);
+        }
 
-        function handleImageSelect(index, file) {
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        // Cropper logic
+        function handleImageSelect(blockId, file) {
             if (!file) return;
-            currentBlockIndex = index;
+            currentBlockId = blockId;
             currentFile = file;
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -210,7 +252,7 @@
                 modal.style.display = 'flex';
                 if (cropper) cropper.destroy();
                 cropper = new Cropper(img, {
-                    aspectRatio: 1 / 1, // квадрат, можно 16/9
+                    aspectRatio: 1 / 1,
                     viewMode: 1,
                     autoCropArea: 1,
                     background: false
@@ -225,21 +267,22 @@
             if (!canvas) return;
             const croppedBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
             const croppedFile = new File([croppedBlob], currentFile.name, { type: 'image/jpeg' });
-            // Загружаем обрезанную картинку в Storage
             const imageUrl = await uploadCroppedImage(croppedFile);
             if (imageUrl) {
-                updateBlockData(currentBlockIndex, 'imageUrl', imageUrl);
-                updateBlockData(currentBlockIndex, 'imageFile', croppedFile);
-                // Показать превью
-                const previewDiv = document.querySelector(`.image-preview[data-index="${currentBlockIndex}"]`);
-                if (previewDiv) {
-                    previewDiv.innerHTML = `<img src="${imageUrl}" class="preview-img">`;
+                const block = achievementsBlocks.find(b => b.id === currentBlockId);
+                if (block) {
+                    block.imageUrl = imageUrl;
+                    // обновляем превью
+                    const previewDiv = document.querySelector(`.image-preview[data-id="${currentBlockId}"]`);
+                    if (previewDiv) {
+                        previewDiv.innerHTML = `<img src="${imageUrl}" class="preview-img">`;
+                    }
                 }
             }
             document.getElementById('cropModal').style.display = 'none';
             if (cropper) cropper.destroy();
             cropper = null;
-            currentBlockIndex = null;
+            currentBlockId = null;
             currentFile = null;
         };
 
@@ -247,7 +290,7 @@
             document.getElementById('cropModal').style.display = 'none';
             if (cropper) cropper.destroy();
             cropper = null;
-            currentBlockIndex = null;
+            currentBlockId = null;
             currentFile = null;
         };
 
@@ -314,13 +357,22 @@
                 // Очистить форму
                 document.getElementById('sessionDate').value = '';
                 document.getElementById('sessionTitle').value = '';
-                document.getElementById('achievementsContainer').innerHTML = '';
                 achievementsBlocks = [];
+                nextBlockId = 0;
+                renderAllBlocks();
                 addAchievementBlock();
+                updateCounter();
             } catch (err) {
                 console.error(err);
                 alert('Ошибка: ' + err.message);
             }
+        };
+
+        document.getElementById('addAchievementBtn').onclick = () => addAchievementBlock();
+
+        // Кнопка назад
+        document.getElementById('backToMain').onclick = () => {
+            window.location.href = 'index.html';
         };
     </script>
 </body>
