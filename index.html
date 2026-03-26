@@ -23,23 +23,19 @@
         const SUPABASE_ANON_KEY = 'sb_publishable_UjoyHMlGvIvQMxKTENAUMQ_OE3GtvON';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const ADMIN_VK_ID = 162536789;
+        let currentUserId = null;
 
-        vkBridge.send('VKWebAppInit');
-
-        async function checkAdmin() {
-            try {
-                const user = await vkBridge.send('VKWebAppGetUserInfo');
-                if (user.id === ADMIN_VK_ID) {
-                    document.getElementById('adminButton').style.display = 'block';
-                }
-            } catch (e) {
-                console.error(e);
+        vkBridge.send('VKWebAppInit').then(() => {
+            return vkBridge.send('VKWebAppGetUserInfo');
+        }).then(user => {
+            currentUserId = user.id;
+            if (currentUserId === ADMIN_VK_ID) {
+                document.getElementById('adminButton').style.display = 'block';
             }
-        }
+            renderSessions();
+        }).catch(err => console.error(err));
 
-        // Загружаем сессии и их достижения
         async function loadSessionsWithAchievements() {
-            // Получаем все сессии, отсортированные по дате (новые сверху)
             const { data: sessions, error: sessionsError } = await supabaseClient
                 .from('sessions')
                 .select('*')
@@ -50,13 +46,12 @@
                 return [];
             }
 
-            // Для каждой сессии получаем достижения
             const sessionsWithAchievements = await Promise.all(sessions.map(async (session) => {
                 const { data: achievements, error: achError } = await supabaseClient
                     .from('achievements')
                     .select('*')
                     .eq('session_id', session.id)
-                    .order('order', { ascending: true }); // можно сортировать по order
+                    .order('order', { ascending: true });
 
                 if (achError) {
                     console.error(`Ошибка загрузки достижений для сессии ${session.id}:`, achError);
@@ -68,7 +63,46 @@
             return sessionsWithAchievements;
         }
 
-        // Отображаем сессии сеткой
+        async function deleteSession(sessionId) {
+            if (!confirm('Удалить сессию и все её достижения? Это действие нельзя отменить.')) return;
+
+            try {
+                // 1. Получаем все достижения сессии, чтобы потом удалить картинки
+                const { data: achievements, error: fetchError } = await supabaseClient
+                    .from('achievements')
+                    .select('image_url')
+                    .eq('session_id', sessionId);
+                if (fetchError) throw fetchError;
+
+                // 2. Удаляем картинки из Storage
+                const storagePromises = achievements.map(async (ach) => {
+                    // Из URL вырезаем имя файла
+                    const url = ach.image_url;
+                    const fileName = url.split('/').pop();
+                    if (fileName) {
+                        await supabaseClient.storage
+                            .from('achievements')
+                            .remove([fileName]);
+                    }
+                });
+                await Promise.all(storagePromises);
+
+                // 3. Удаляем сессию (достижения удалятся каскадно)
+                const { error: deleteError } = await supabaseClient
+                    .from('sessions')
+                    .delete()
+                    .eq('id', sessionId);
+                if (deleteError) throw deleteError;
+
+                // 4. Обновляем ленту
+                renderSessions();
+                alert('Сессия удалена');
+            } catch (err) {
+                console.error('Ошибка удаления:', err);
+                alert('Ошибка удаления: ' + err.message);
+            }
+        }
+
         async function renderSessions() {
             const container = document.getElementById('sessionsList');
             container.innerHTML = '<div class="loading">Загрузка...</div>';
@@ -86,11 +120,16 @@
                 const sessionBlock = document.createElement('div');
                 sessionBlock.className = 'session-block';
 
-                // Заголовок сессии
+                // Заголовок сессии с кнопкой удаления (только для админа)
                 const sessionHeader = document.createElement('div');
                 sessionHeader.className = 'session-header';
                 const formattedDate = new Date(session.session_date).toLocaleDateString('ru-RU');
-                sessionHeader.innerHTML = `<h2>📅 Сессия ${formattedDate}</h2>`;
+                sessionHeader.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h2>📅 Сессия ${formattedDate}</h2>
+                        ${currentUserId === ADMIN_VK_ID ? `<button class="delete-session-btn" data-id="${session.id}">🗑️</button>` : ''}
+                    </div>
+                `;
                 if (session.title && session.title !== `Сессия ${formattedDate}`) {
                     sessionHeader.innerHTML += `<p class="session-title">${escapeHtml(session.title)}</p>`;
                 }
@@ -104,19 +143,16 @@
                     const card = document.createElement('div');
                     card.className = 'achievement-card';
 
-                    // Картинка
                     const img = document.createElement('img');
                     img.src = ach.image_url;
                     img.className = 'achievement-img';
                     img.onclick = () => vkBridge.send('VKWebAppShowImages', { images: [ach.image_url] });
                     img.onerror = () => { img.src = 'https://via.placeholder.com/200?text=No+Image'; };
 
-                    // Имя игрока
                     const playerName = document.createElement('div');
                     playerName.className = 'player-name';
                     playerName.innerHTML = `<a href="https://vk.com/id${ach.player_vk_id}" target="_blank">${escapeHtml(ach.player_name)}</a>`;
 
-                    // Текст достижения
                     const text = document.createElement('div');
                     text.className = 'achievement-text';
                     text.textContent = ach.achievement_text;
@@ -130,9 +166,16 @@
                 sessionBlock.appendChild(grid);
                 container.appendChild(sessionBlock);
             });
+
+            // Навешиваем обработчики на кнопки удаления
+            document.querySelectorAll('.delete-session-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = btn.getAttribute('data-id');
+                    deleteSession(id);
+                });
+            });
         }
 
-        // Простая защита от XSS
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/[&<>]/g, function(m) {
@@ -142,9 +185,6 @@
                 return m;
             });
         }
-
-        checkAdmin();
-        renderSessions();
     </script>
 </body>
 </html>
