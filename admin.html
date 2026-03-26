@@ -23,12 +23,10 @@
         <div id="errorMsg" style="display:none; color:#ff8888;"></div>
     </div>
     <script>
-        // ---------- ВСТАВЬТЕ СВОИ ДАННЫЕ ----------
-        const SUPABASE_URL = 'https://jrwgibmbjaoogsdnukzi.supabase.co
-';   // замените
-        const SUPABASE_ANON_KEY = 'sb_publishable_UjoyHMlGvIvQMxKTENAUMQ_OE3GtvON';    // замените
-        // -----------------------------------------
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Данные Supabase
+        const SUPABASE_URL = 'https://jrwgibmbjaoogsdnukzi.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_UjoyHMlGvIvQMxKTENAUMQ_OE3GtvON';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const GROUP_ID = 236712001;          // ID вашей группы (положительный)
         const APP_ID = 54508090;             // ID вашего VK приложения
 
@@ -39,8 +37,7 @@
             return vkBridge.send('VKWebAppGetUserInfo');
         }).then(user => {
             currentUserId = user.id;
-            // Устанавливаем переменную сессии в Supabase (RLS проверит)
-            return supabase.rpc('set_user_id', { user_id: currentUserId });
+            return supabaseClient.rpc('set_user_id', { user_id: currentUserId });
         }).then(() => {
             return vkBridge.send('VKWebAppGetCommunityToken', {
                 app_id: APP_ID,
@@ -83,11 +80,11 @@
 
         async function uploadImage(file) {
             const fileName = `${Date.now()}_${file.name}`;
-            const { data, error } = await supabase.storage
+            const { data, error } = await supabaseClient.storage
                 .from('achievements')
                 .upload(fileName, file);
             if (error) throw error;
-            const { data: urlData } = supabase.storage
+            const { data: urlData } = supabaseClient.storage
                 .from('achievements')
                 .getPublicUrl(fileName);
             return urlData.publicUrl;
@@ -106,7 +103,7 @@
 
             try {
                 const imageUrl = await uploadImage(file);
-                const { error } = await supabase
+                const { error } = await supabaseClient
                     .from('achievements')
                     .insert([{
                         title,
